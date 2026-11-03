@@ -3,9 +3,15 @@
 -- Solo se usa en el CLIENTE. No cambia nada del juego, solo lo visual.
 --
 -- Tres tipos de esquiva (t va de 0 a 1 durante la esquiva):
---   Rodar     -> manos al suelo, giro sobre un hombro, levantarse inclinado
---   Lateral   -> impulso, voltereta lateral en el aire en forma de estrella, aterrizaje
---   PasoAtras -> salto corto hacia atrás con el cuerpo inclinado hacia delante
+--   Rodar     -> manos al suelo, giro sobre un hombro con torsión, apoyo y rebote
+--   Lateral   -> impulso, voltereta lateral en el aire (brazo líder primero), aterrizaje
+--   PasoAtras -> brazos atrás para impulsarse, salto hacia atrás, rodillas amortiguan
+--
+-- Trucos de animación para que se vea natural:
+--   * Mientras esquiva, se apagan las animaciones de caminar/correr de Roblox
+--   * Asimetría: un lado del cuerpo se adelanta al otro
+--   * La cabeza va con un pequeño retraso
+--   * Rebote al aterrizar: el peso cae sobre las rodillas y se recupera
 --
 -- Funciona con los dos tipos de articulaciones de Roblox:
 --   * Motor6D (personajes clásicos): se mueve su propiedad C0
@@ -21,6 +27,8 @@ local Tipos = require(ReplicatedStorage.Config.CombateConfig).Esquiva.TIPOS
 local EfectoRodar = {}
 
 local INCLINACION_HOMBRO = math.rad(25) -- la voltereta va sobre un hombro, no recta
+local DESFASE_LADOS = 0.045 -- cuánto se retrasa un lado del cuerpo respecto al otro
+local RETRASO_CABEZA = 0.05
 
 local function grados(x, y, z)
 	return CFrame.Angles(math.rad(x), math.rad(y or 0), math.rad(z or 0))
@@ -31,16 +39,17 @@ end
 -- Cuerpo hecho bolita para rodar
 local ENCOGIDO = {
 	LeftHip = grados(100),
-	RightHip = grados(100),
+	RightHip = grados(105),
 	LeftKnee = grados(-120),
-	RightKnee = grados(-120),
+	RightKnee = grados(-115),
 	LeftShoulder = grados(70, 0, -15),
-	RightShoulder = grados(70, 0, 15),
+	RightShoulder = grados(65, 0, 18),
 	LeftElbow = grados(80),
-	RightElbow = grados(80),
+	RightElbow = grados(85),
 	Waist = grados(-30), -- espalda curvada
-	Neck = grados(-35), -- barbilla al pecho
 }
+
+local CABEZA_ENCOGIDA = { Neck = grados(-35) } -- barbilla al pecho
 
 -- Brazos estirados hacia delante para apoyar las manos al empezar a rodar
 local ALCANCE = {
@@ -48,19 +57,24 @@ local ALCANCE = {
 	RightShoulder = grados(120, 0, 10),
 	LeftElbow = grados(15),
 	RightElbow = grados(15),
+	Waist = grados(-10),
 }
 
--- Forma de estrella para la voltereta lateral
-local ESTRELLA = {
-	LeftShoulder = grados(0, 0, -110),
-	RightShoulder = grados(0, 0, 110),
-	LeftElbow = grados(10),
-	RightElbow = grados(10),
-	LeftHip = grados(0, 0, -35),
-	RightHip = grados(0, 0, 35),
+-- Al terminar de rodar: una rodilla adelantada, brazos para equilibrarse
+local APOYO = {
+	LeftHip = grados(70),
+	RightHip = grados(30),
+	LeftKnee = grados(-95),
+	RightKnee = grados(-55),
+	LeftShoulder = grados(40, 0, -20),
+	RightShoulder = grados(25, 0, 25),
+	LeftElbow = grados(35),
+	RightElbow = grados(25),
+	Waist = grados(-18),
+	Neck = grados(8), -- levanta la mirada
 }
 
--- Piernas flexionadas para tomar impulso o amortiguar la caída
+-- Piernas flexionadas para tomar impulso o amortiguar
 local FLEXION = {
 	LeftHip = grados(50),
 	RightHip = grados(50),
@@ -69,12 +83,39 @@ local FLEXION = {
 	Waist = grados(-15),
 }
 
--- Brazos adelantados para equilibrarse en el salto hacia atrás
+-- Voltereta lateral: el brazo y la pierna "líder" (del lado al que vas) se abren más
+local ESTRELLA_LIDER_DERECHA = {
+	RightShoulder = grados(0, 0, 150),
+	RightElbow = grados(5),
+	RightHip = grados(0, 0, 45),
+	LeftShoulder = grados(0, 0, -95),
+	LeftElbow = grados(20),
+	LeftHip = grados(0, 0, -28),
+	LeftKnee = grados(-20),
+}
+local ESTRELLA_LIDER_IZQUIERDA = {
+	LeftShoulder = grados(0, 0, -150),
+	LeftElbow = grados(5),
+	LeftHip = grados(0, 0, -45),
+	RightShoulder = grados(0, 0, 95),
+	RightElbow = grados(20),
+	RightHip = grados(0, 0, 28),
+	RightKnee = grados(-20),
+}
+
+-- Paso atrás: primero los brazos van hacia atrás, luego adelante para equilibrar
+local BRAZOS_ATRAS = {
+	LeftShoulder = grados(-35, 0, -10),
+	RightShoulder = grados(-35, 0, 10),
+	LeftElbow = grados(15),
+	RightElbow = grados(15),
+}
 local EQUILIBRIO = {
-	LeftShoulder = grados(35),
-	RightShoulder = grados(35),
-	LeftElbow = grados(30),
-	RightElbow = grados(30),
+	LeftShoulder = grados(45, 0, -15),
+	RightShoulder = grados(40, 0, 15),
+	LeftElbow = grados(40),
+	RightElbow = grados(35),
+	Neck = grados(-10),
 }
 
 local NOMBRES_ARTICULACIONES = {
@@ -96,65 +137,136 @@ local function curva(a, b, c, d, t)
 	return suave(a, b, t) - suave(c, d, t)
 end
 
+-- Un "bache" de 0 -> 1 -> 0 entre a y b (para rebotes)
+local function bache(a, b, t)
+	return math.sin(math.pi * suave(a, b, t))
+end
+
+-- El peso puede ser un número (igual para todo) o { L = izq, R = der, C = centro }
+local function pesoPara(peso, nombre)
+	if type(peso) == "number" then
+		return peso
+	end
+	if string.sub(nombre, 1, 4) == "Left" then
+		return peso.L or 0
+	elseif string.sub(nombre, 1, 5) == "Right" then
+		return peso.R or 0
+	end
+	return peso.C or 0
+end
+
 -- Mezcla varias posturas con su peso: combinar({POSTURA, peso}, {POSTURA, peso}, ...)
 local function combinar(...)
 	local resultado = {}
 	for _, par in { ... } do
 		local postura, peso = par[1], par[2]
-		if peso > 0 then
-			for nombre, giro in postura do
-				resultado[nombre] = (resultado[nombre] or CFrame.identity) * CFrame.identity:Lerp(giro, peso)
+		for nombre, giro in postura do
+			local p = pesoPara(peso, nombre)
+			if p > 0 then
+				resultado[nombre] = (resultado[nombre] or CFrame.identity) * CFrame.identity:Lerp(giro, p)
 			end
 		end
 	end
 	return resultado
 end
 
+-- Calcula un peso para cada lado del cuerpo, con el lado líder adelantado
+local function porLados(funcion, t, liderIzquierda)
+	local adelantado = funcion(t)
+	local retrasado = funcion(t - DESFASE_LADOS)
+	local centro = funcion(t - DESFASE_LADOS * 0.5)
+	if liderIzquierda then
+		return { L = adelantado, R = retrasado, C = centro }
+	end
+	return { L = retrasado, R = adelantado, C = centro }
+end
+
 -- ===== ANIMACIONES =====
--- Cada una recibe t (0 a 1) y devuelve: movimiento del cuerpo, giro de articulaciones
+-- Cada una recibe t (0 a 1) y el contexto, y devuelve:
+-- movimiento del cuerpo entero, giro de cada articulación
 
 local Animaciones = {}
 
-function Animaciones.Rodar(t, ejes)
-	local alcance = curva(0, 0.1, 0.15, 0.3, t)
-	local encogido = curva(0.05, 0.25, 0.62, 0.9, t)
-	local bajada = 1.6 * curva(0, 0.2, 0.7, 1, t)
-	-- Giro completo + al final se levanta un poco inclinado hacia delante
-	local giro = suave(0.08, 0.72, t) * math.pi * 2 + math.rad(15) * curva(0.7, 0.82, 0.85, 1, t)
+function Animaciones.Rodar(t, ctx)
+	local izq = ctx.liderIzquierda
+	local alcance = porLados(function(x)
+		return curva(0, 0.1, 0.15, 0.3, x)
+	end, t, izq)
+	local encogido = porLados(function(x)
+		return curva(0.05, 0.25, 0.6, 0.82, x)
+	end, t, izq)
+	local apoyo = porLados(function(x)
+		return curva(0.7, 0.82, 0.9, 1, x)
+	end, t, izq)
+	local cabeza = curva(0.05, 0.25, 0.6, 0.82, t - RETRASO_CABEZA)
 
-	local cuerpo = CFrame.new(0, -bajada, 0) * CFrame.fromAxisAngle(ejes.hombro, giro)
-	return cuerpo, combinar({ ENCOGIDO, encogido }, { ALCANCE, alcance })
+	-- Bajar para rodar + pequeño rebote al apoyarse al final
+	local bajada = 1.6 * curva(0, 0.2, 0.7, 0.95, t) + 0.35 * bache(0.8, 1, t)
+	-- Giro completo + al final se levanta un poco inclinado hacia delante
+	local giro = suave(0.08, 0.72, t) * math.pi * 2 + math.rad(15) * curva(0.7, 0.82, 0.86, 1, t)
+	-- Torsión del cuerpo a mitad del giro (hacia el hombro sobre el que rueda)
+	local torsion = math.rad(14) * ctx.lado * curva(0.1, 0.35, 0.5, 0.75, t)
+
+	local cuerpo = CFrame.new(0, -bajada, 0)
+		* CFrame.fromAxisAngle(ctx.ejeHombro, giro)
+		* CFrame.Angles(0, torsion, 0)
+	return cuerpo, combinar({ ENCOGIDO, encogido }, { CABEZA_ENCOGIDA, cabeza }, { ALCANCE, alcance }, { APOYO, apoyo })
 end
 
-function Animaciones.Lateral(t, ejes)
+function Animaciones.Lateral(t, ctx)
+	local izq = ctx.liderIzquierda
 	local impulso = curva(0, 0.12, 0.14, 0.26, t)
 	local vuelo = curva(0.12, 0.4, 0.5, 0.8, t)
 	local aterrizaje = curva(0.72, 0.82, 0.84, 1, t)
-	local estrella = curva(0.15, 0.3, 0.62, 0.78, t)
+	local estrella = porLados(function(x)
+		return curva(0.14, 0.3, 0.6, 0.78, x)
+	end, t, izq)
+	local flexion = math.max(impulso, aterrizaje)
 	local giro = suave(0.14, 0.76, t) * math.pi * 2
 
-	local altura = 1.5 * vuelo - 0.8 * impulso - 0.9 * aterrizaje
-	local cuerpo = CFrame.new(0, altura, 0) * CFrame.fromAxisAngle(ejes.recto, giro)
-	return cuerpo, combinar({ ESTRELLA, estrella }, { FLEXION, math.max(impulso, aterrizaje) })
+	-- Sube en el aire, baja para impulsarse y para aterrizar, y rebota al final
+	local altura = 1.5 * vuelo - 0.8 * impulso - 0.9 * aterrizaje - 0.25 * bache(0.84, 1, t)
+	-- Al despegar el cuerpo se gira un poco hacia donde va
+	local torsion = math.rad(12) * ctx.lado * curva(0.05, 0.2, 0.7, 0.9, t)
+
+	local estrellaPostura = if izq then ESTRELLA_LIDER_IZQUIERDA else ESTRELLA_LIDER_DERECHA
+	local cuerpo = CFrame.new(0, altura, 0)
+		* CFrame.fromAxisAngle(ctx.ejeRecto, giro)
+		* CFrame.Angles(0, torsion, 0)
+	return cuerpo,
+		combinar({ estrellaPostura, estrella }, { FLEXION, flexion }, { EQUILIBRIO, aterrizaje * 0.6 })
 end
 
-function Animaciones.PasoAtras(t, ejes)
-	local salto = math.sin(math.pi * suave(0.05, 0.75, t))
+function Animaciones.PasoAtras(t, ctx)
+	local izq = ctx.liderIzquierda
 	local impulso = curva(0, 0.08, 0.1, 0.2, t)
+	local salto = bache(0.05, 0.75, t)
 	local aterrizaje = curva(0.7, 0.8, 0.82, 1, t)
+	local brazosAtras = porLados(function(x)
+		return curva(0, 0.08, 0.12, 0.25, x)
+	end, t, izq)
+	local equilibrio = porLados(function(x)
+		return curva(0.15, 0.35, 0.75, 1, x)
+	end, t, izq)
 	local inclinacion = math.rad(14) * curva(0, 0.15, 0.75, 1, t)
 
-	local altura = 0.5 * salto - 0.6 * math.max(impulso, aterrizaje)
+	local altura = 0.5 * salto - 0.6 * math.max(impulso, aterrizaje) - 0.2 * bache(0.82, 1, t)
 	-- Ángulo negativo: el cuerpo se inclina hacia delante mientras salta hacia atrás
-	local cuerpo = CFrame.new(0, altura, 0) * CFrame.fromAxisAngle(ejes.recto, -inclinacion)
-	return cuerpo, combinar({ EQUILIBRIO, salto }, { FLEXION, math.max(impulso, aterrizaje) * 0.8 })
+	local cuerpo = CFrame.new(0, altura, 0) * CFrame.fromAxisAngle(ctx.ejeRecto, -inclinacion)
+	return cuerpo,
+		combinar(
+			{ BRAZOS_ATRAS, brazosAtras },
+			{ EQUILIBRIO, equilibrio },
+			{ FLEXION, math.max(impulso, aterrizaje) * 0.8 }
+		)
 end
 
 -- Momentos en los que suena algo o sale polvo: { t, sonido, volumen relativo, polvo }
 local EVENTOS = {
 	Rodar = {
 		{ 0, "ROPA", 1, 5 },
-		{ 0.66, "CAIDA", 1, 6 },
+		{ 0.62, "CAIDA", 1, 6 },
+		{ 0.84, "CAIDA", 0.5, 0 }, -- el pie se apoya al levantarse
 	},
 	Lateral = {
 		{ 0.05, "ROPA", 0.6, 4 },
@@ -208,6 +320,41 @@ local function buscarArticulaciones(personaje)
 		end
 	end
 	return raiz, resto
+end
+
+-- Baja casi a cero las animaciones normales (caminar, correr...) mientras esquiva.
+-- Devuelve una función que las restaura al terminar.
+local function silenciarAnimaciones(personaje)
+	local humanoide = personaje:FindFirstChildOfClass("Humanoid")
+	local animador = humanoide and humanoide:FindFirstChildOfClass("Animator")
+	if not animador then
+		return function() end
+	end
+
+	local pistas = {} -- [pista] = peso que tenía antes
+	local function silenciar(pista, tiempo)
+		if pistas[pista] == nil then
+			pistas[pista] = if pista.WeightTarget > 0.01 then pista.WeightTarget else 1
+		end
+		pista:AdjustWeight(0.001, tiempo)
+	end
+
+	for _, pista in animador:GetPlayingAnimationTracks() do
+		silenciar(pista, 0.08)
+	end
+	-- Si Roblox arranca otra animación durante la esquiva, también la silenciamos
+	local conexion = animador.AnimationPlayed:Connect(function(pista)
+		silenciar(pista, 0)
+	end)
+
+	return function()
+		conexion:Disconnect()
+		for pista, pesoAnterior in pistas do
+			if pista.IsPlaying then
+				pista:AdjustWeight(pesoAnterior, 0.2)
+			end
+		end
+	end
 end
 
 -- ===== SONIDO Y POLVO =====
@@ -313,13 +460,22 @@ function EfectoRodar.Reproducir(personaje, direccion, tipo)
 	end
 	direccionLocal = direccionLocal.Unit
 
-	-- Ejes de giro: "recto" gira hacia la dirección; "hombro" es igual pero inclinado
+	-- Contexto de la animación
 	local ejeRecto = Vector3.yAxis:Cross(direccionLocal)
-	local lado = if math.random() < 0.5 then 1 else -1
-	local ejes = {
-		recto = ejeRecto,
-		hombro = CFrame.fromAxisAngle(direccionLocal, INCLINACION_HOMBRO * lado):VectorToWorldSpace(ejeRecto),
+	local lado
+	if tipo == "Lateral" then
+		lado = if direccionLocal.X > 0 then 1 else -1 -- lado hacia el que salta
+	else
+		lado = if math.random() < 0.5 then 1 else -1 -- hombro sobre el que rueda
+	end
+	local ctx = {
+		lado = lado,
+		liderIzquierda = lado < 0,
+		ejeRecto = ejeRecto,
+		ejeHombro = CFrame.fromAxisAngle(direccionLocal, INCLINACION_HOMBRO * lado):VectorToWorldSpace(ejeRecto),
 	}
+
+	local restaurarAnimaciones = silenciarAnimaciones(personaje)
 
 	local inicio = os.clock()
 	local siguienteEvento = 1
@@ -336,6 +492,7 @@ function EfectoRodar.Reproducir(personaje, direccion, tipo)
 		for _, articulacion in articulaciones do
 			pcall(articulacion.poner, articulacion.original)
 		end
+		pcall(restaurarAnimaciones)
 		rodando[personaje] = nil
 		if raiz.Parent and RESPIRA_AL_FINAL[tipo] and math.random() < Sonidos.PROBABILIDAD_RESPIRACION then
 			reproducirSonido(raiz, elegir(Sonidos.RESPIRACION), Sonidos.VOLUMEN_RESPIRACION)
@@ -358,7 +515,7 @@ function EfectoRodar.Reproducir(personaje, direccion, tipo)
 		end
 
 		local ok, err = pcall(function()
-			local cuerpo, giros = animar(t, ejes)
+			local cuerpo, giros = animar(t, ctx)
 			raizArt.poner(cuerpo * raizArt.original)
 			for nombre, articulacion in articulaciones do
 				articulacion.poner(articulacion.original * (giros[nombre] or CFrame.identity))

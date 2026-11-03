@@ -25,9 +25,9 @@ CombateConfig.Esquiva = {
 	-- DURACION: segundos que dura | VELOCIDAD: impulso inicial (studs/s)
 	-- FRENADO: cuánto frena al final (0 = nada, 1 = se detiene del todo)
 	TIPOS = {
-		Rodar = { DURACION = 0.55, VELOCIDAD = 44, FRENADO = 0.75 },
-		Lateral = { DURACION = 0.6, VELOCIDAD = 40, FRENADO = 0.7 },
-		PasoAtras = { DURACION = 0.38, VELOCIDAD = 34, FRENADO = 0.9 },
+		Rodar = { DURACION = 0.62, VELOCIDAD = 42, FRENADO = 0.8 },
+		Lateral = { DURACION = 0.66, VELOCIDAD = 38, FRENADO = 0.75 },
+		PasoAtras = { DURACION = 0.42, VELOCIDAD = 32, FRENADO = 0.9 },
 	},
 }
 
