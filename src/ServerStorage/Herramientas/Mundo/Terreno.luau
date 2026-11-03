@@ -334,68 +334,15 @@ function Terreno.Generar()
 end
 
 -- ===== ISLA FLOTANTE =====
--- Arriba plana con hierba; abajo una roca en forma de cono invertido
+-- La forma de la isla está en ReplicatedStorage/Mundo/IslaForma porque el cliente
+-- también la necesita (para esconderla hasta que el jugador la desbloquee).
 
-local RADIO_ISLA = 110
+local IslaForma = require(ReplicatedStorage.Mundo.IslaForma)
 
-function Terreno.alturasIsla(x, z)
-	local centro = Regiones.ISLA
-	local dx, dz = x - centro.X, z - centro.Z
-	local r = math.sqrt(dx * dx + dz * dz)
-	local radio = RADIO_ISLA * (1 + ruido(x, z, 2, 70, SEMILLA + 30) * 0.25)
-	if r > radio then
-		return nil
-	end
-	local f = r / radio
-	local arriba = centro.Y + ruido(x, z, 3, 60, SEMILLA + 31) * 10 - f ^ 3 * 10
-	local abajo = centro.Y - (1 - f) ^ 1.2 * 140 - math.abs(ruido(x, z, 3, 25, SEMILLA + 32)) * 25
-	return arriba, abajo
-end
+Terreno.alturasIsla = IslaForma.alturas
 
 function Terreno.GenerarIsla()
-	local centro = Regiones.ISLA
-	local tamano = 256
-	local x0 = math.floor((centro.X - tamano / 2) / RES) * RES
-	local z0 = math.floor((centro.Z - tamano / 2) / RES) * RES
-	local y0 = math.floor((centro.Y - 150) / RES) * RES
-	local alto = 192
-	local nx, ny, nz = tamano / RES, alto / RES, tamano / RES
-
-	local materiales, ocupacion = {}, {}
-	for a = 1, nx do
-		materiales[a], ocupacion[a] = {}, {}
-		for k = 1, ny do
-			materiales[a][k], ocupacion[a][k] = {}, {}
-		end
-		for b = 1, nz do
-			local x = x0 + (a - 0.5) * RES
-			local z = z0 + (b - 0.5) * RES
-			local arriba, abajo = Terreno.alturasIsla(x, z)
-			for k = 1, ny do
-				local fondo = y0 + (k - 1) * RES
-				local techo = fondo + RES
-				local lleno = 0
-				if arriba then
-					lleno = math.clamp(math.min(arriba - fondo, techo - abajo) / RES, 0, 1)
-				end
-				ocupacion[a][k][b] = lleno
-				if lleno > 0 then
-					if arriba - fondo < 6 then
-						materiales[a][k][b] = M.Grass
-					elseif ruido(x, fondo, 1, 20, SEMILLA + 33) > 0.1 then
-						materiales[a][k][b] = M.Slate
-					else
-						materiales[a][k][b] = M.Rock
-					end
-				else
-					materiales[a][k][b] = M.Air
-				end
-			end
-		end
-	end
-
-	local region = Region3.new(Vector3.new(x0, y0, z0), Vector3.new(x0 + tamano, y0 + alto, z0 + tamano))
-	Workspace.Terrain:WriteVoxels(region, RES, materiales, ocupacion)
+	IslaForma.Construir()
 end
 
 return Terreno

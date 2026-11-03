@@ -7,6 +7,7 @@
 -- Los árboles con hojas llevan un emisor de hojas que caen y vuelan con el viento.
 
 local CollectionService = game:GetService("CollectionService")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Regiones = require(ReplicatedStorage.Config.RegionesConfig)
@@ -25,6 +26,39 @@ local TEXTURA_RESERVA = "rbxasset://textures/particles/smoke_main.dds"
 
 local rng = Random.new(Terreno.SEMILLA)
 local texturaHoja = TEXTURA_RESERVA
+
+-- ===== SUELO REAL =====
+-- El terreno de Roblox está hecho de bloques de 4 x 4, así que su superficie real
+-- no coincide exactamente con la altura calculada. Por eso medimos con un rayo.
+local parametrosSuelo = RaycastParams.new()
+parametrosSuelo.FilterType = Enum.RaycastFilterType.Include
+parametrosSuelo.FilterDescendantsInstances = { Workspace.Terrain }
+parametrosSuelo.IgnoreWater = false
+
+-- Altura exacta del suelo en (x, z); nil si hay agua o nada
+local function sueloReal(x, z)
+	local resultado = Workspace:Raycast(Vector3.new(x, 400, z), Vector3.new(0, -800, 0), parametrosSuelo)
+	if not resultado or resultado.Material == Enum.Material.Water then
+		return nil
+	end
+	return resultado.Position.Y
+end
+
+-- El punto más bajo del suelo alrededor de (x, z): así nada queda en el aire en las cuestas
+local function sueloMinimo(x, z, radio)
+	local minimo = sueloReal(x, z)
+	if not minimo then
+		return nil
+	end
+	for i = 1, 6 do
+		local angulo = i / 6 * math.pi * 2
+		local y = sueloReal(x + math.cos(angulo) * radio, z + math.sin(angulo) * radio)
+		if y then
+			minimo = math.min(minimo, y)
+		end
+	end
+	return minimo
+end
 
 -- ===== AYUDANTES =====
 
@@ -552,8 +586,9 @@ local function sembrar(cantidad, intentosMaximos, condicion, crear)
 		local d = Terreno.muestrear(x, z)
 		if d.altura > NIVEL_AGUA + 2 and d.camino < 0.15 and d.inicio < 0.3 and d.altar < 0.3 then
 			local pendiente = Terreno.pendienteEn(x, z)
-			if condicion(d, pendiente, x, z) then
-				crear(Vector3.new(x, d.altura, z), d)
+			local y = if condicion(d, pendiente, x, z) then sueloReal(x, z) else nil
+			if y and y > NIVEL_AGUA + 1 then
+				crear(Vector3.new(x, y, z), d)
 				hechos += 1
 			end
 		end
@@ -624,6 +659,26 @@ local function prepararPlantilla(nombre, datos)
 		modelo:Destroy()
 		return
 	end
+	-- Algunos árboles de la tienda traen un "disco" de tierra bajo el tronco (pieza Soil).
+	-- Sobre la hierba parece una maceta, así que lo quitamos y apuntamos a qué altura
+	-- estaba su parte de arriba: ahí debe quedar el suelo para que las raíces queden enterradas.
+	local techoTierra = nil
+	for _, p in modelo:GetDescendants() do
+		if p:IsA("BasePart") then
+			local nombrePieza = string.lower(p.Name)
+			if nombrePieza:find("soil") or nombrePieza:find("dirt") or nombrePieza:find("mound") then
+				local arriba = p.Position.Y + p.Size.Y / 2
+				techoTierra = math.max(techoTierra or -math.huge, arriba)
+				p:Destroy()
+			end
+		end
+	end
+	if techoTierra then
+		local caja, tamano = modelo:GetBoundingBox()
+		local fondo = caja.Position.Y - tamano.Y / 2
+		modelo:SetAttribute("Enterrar", math.clamp((techoTierra - fondo) / tamano.Y, 0, 0.3))
+		print(string.format("[MUNDO]    %s: quitado el disco de tierra (enterrar %.0f%%)", nombre, modelo:GetAttribute("Enterrar") * 100))
+	end
 	print("[MUNDO] Modelo listo:", nombre, informe)
 	plantillas[nombre] = modelo
 end
@@ -658,11 +713,23 @@ local function colocarModelo(nombre, base, carpeta, escalaExtra)
 	local pivote = copia:GetPivot()
 	copia:PivotTo(CFrame.new(pivote.Position) * CFrame.Angles(0, n(0, math.pi * 2), 0) * pivote.Rotation)
 
-	-- Apoyarlo en el suelo (un poco hundido para que no flote en las cuestas)
+	-- Apoyarlo en el punto más bajo del suelo real bajo su base, y hundirlo un poco:
+	-- los árboles traen un montículo de raíces en la base que debe quedar enterrado
 	local caja, tamanoFinal = copia:GetBoundingBox()
 	local fondo = caja.Position.Y - tamanoFinal.Y / 2
-	local hundir = tamanoFinal.Y * 0.03 + 0.4
-	copia:PivotTo(copia:GetPivot() + Vector3.new(base.X - caja.Position.X, base.Y - hundir - fondo, base.Z - caja.Position.Z))
+	local radioBase = math.clamp(tamanoFinal.Y * 0.04, 0.6, 3)
+	local suelo = sueloMinimo(base.X, base.Z, radioBase) or base.Y
+	local hundir
+	if not datos.balanceo then
+		hundir = tamanoFinal.Y * 0.25 -- rocas y cactus: bien asentados
+	elseif tamanoFinal.Y > 12 then
+		-- árboles: las raíces bajo tierra (y si traía disco de tierra, hasta donde llegaba)
+		hundir = math.max(tamanoFinal.Y * 0.04 + 0.6, tamanoFinal.Y * (plantilla:GetAttribute("Enterrar") or 0) + 0.4)
+	else
+		hundir = tamanoFinal.Y * 0.1 + 0.2 -- plantas pequeñas
+	end
+	copia:PivotTo(copia:GetPivot() + Vector3.new(base.X - caja.Position.X, suelo - hundir - fondo, base.Z - caja.Position.Z))
+	base = Vector3.new(base.X, suelo, base.Z)
 
 	-- Colisionador invisible en el tronco para no atravesar los árboles
 	if datos.balanceo and tamanoFinal.Y > 12 then
@@ -792,11 +859,6 @@ function Vegetacion.Generar(mundo)
 		plantar("Helecho", pos, cBosque, nil)
 	end)
 	sembrar(70, 4000, function(d, p)
-		return esBosque(d) and p < 0.3 and d.manchas < 0.1
-	end, function(pos)
-		flores(pos, cBosque)
-	end)
-	sembrar(70, 4000, function(d, p)
 		return esBosque(d) and (p > 0.4 or rng:NextNumber() < 0.2)
 	end, function(pos)
 		plantar("Roca", pos, cBosque, rocaB)
@@ -859,16 +921,18 @@ function Vegetacion.Generar(mundo)
 	sembrar(110, 5000, function(d, p)
 		return esDesierto(d) and (p > 0.35 or rng:NextNumber() < 0.3)
 	end, function(pos)
-		roca(pos, cDesierto, M.Sandstone, Color3.fromRGB(168, 100, 64), 1.3)
+		plantar("Roca", pos, cDesierto, function(posicion, c)
+			roca(posicion, c, M.Sandstone, Color3.fromRGB(168, 100, 64), 1.3)
+		end, 1.2)
 	end)
 	local oasis = Terreno.OASIS
 	for i = 1, 9 do
 		local angulo = i / 9 * math.pi * 2 + n(-0.2, 0.2)
 		local distancia = n(62, 80)
 		local x, z = oasis.X + math.cos(angulo) * distancia, oasis.Y + math.sin(angulo) * distancia
-		local d = Terreno.muestrear(x, z)
-		if d.altura > NIVEL_AGUA + 0.5 then
-			palmera(Vector3.new(x, d.altura, z), cDesierto)
+		local y = sueloMinimo(x, z, 1.5)
+		if y and y > NIVEL_AGUA + 0.5 then
+			palmera(Vector3.new(x, y - 0.5, z), cDesierto)
 		end
 	end
 

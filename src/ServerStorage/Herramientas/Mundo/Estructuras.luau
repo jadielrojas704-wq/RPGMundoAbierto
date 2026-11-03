@@ -398,22 +398,16 @@ function Estructuras.Isla(padre)
 	agua.LightInfluence = 1
 	agua.Parent = caida
 
-	-- Banco de nubes que la tapa casi entera desde abajo
-	for _ = 1, 30 do
-		local a, r = n(0, 6.28), n(40, 200)
-		nubeGrande(
-			Vector3.new(isla.X + math.cos(a) * r, isla.Y - n(50, 130), isla.Z + math.sin(a) * r),
-			Vector3.new(n(120, 220), n(30, 55), n(120, 220)),
-			modelo
-		)
-	end
-	-- Nubes suaves alrededor (partículas) para que el borde no sea duro
-	for i = 1, 8 do
+	-- Nubes de partículas alrededor y debajo: la esconden sin verse como bolas
+	-- Dos anillos: uno alrededor (oculta los bordes) y otro debajo (oculta la roca)
+	for i = 1, 16 do
 		local a = i / 8 * math.pi * 2
+		local distancia = if i <= 8 then 150 else 60
+		local altura = if i <= 8 then isla.Y - 60 else isla.Y - 120
 		local emisorParte = parte({
 			Name = "EmisorNubes",
-			Size = Vector3.new(60, 20, 60),
-			CFrame = CFrame.new(isla.X + math.cos(a) * 150, isla.Y - 70, isla.Z + math.sin(a) * 150),
+			Size = Vector3.new(90, 25, 90),
+			CFrame = CFrame.new(isla.X + math.cos(a) * distancia, altura, isla.Z + math.sin(a) * distancia),
 			Transparency = 1,
 			CanCollide = false,
 			CanQuery = false,
@@ -422,7 +416,7 @@ function Estructuras.Isla(padre)
 		local nubes = Instance.new("ParticleEmitter")
 		nubes.Name = "Nubes"
 		nubes.Texture = TEXTURA_HUMO
-		nubes.Rate = 0.5
+		nubes.Rate = 0.8
 		nubes.Lifetime = NumberRange.new(25, 35)
 		nubes.Speed = NumberRange.new(0.3, 1)
 		nubes.Rotation = NumberRange.new(0, 360)
@@ -435,7 +429,9 @@ function Estructuras.Isla(padre)
 			NumberSequenceKeypoint.new(1, 1),
 		})
 		nubes.Color = ColorSequence.new(Color3.fromRGB(250, 245, 238))
-		nubes.LightInfluence = 1
+		-- Un poco de luz propia: vistas desde abajo no deben parecer manchas oscuras
+		nubes.LightInfluence = 0.5
+		nubes.LightEmission = 0.1
 		nubes.Parent = emisorParte
 	end
 

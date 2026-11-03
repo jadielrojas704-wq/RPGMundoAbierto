@@ -24,7 +24,22 @@ local Terreno = require(Mundo.Terreno)
 local Vegetacion = require(Mundo.Vegetacion)
 local Estructuras = require(Mundo.Estructuras)
 
+local Materiales = require(script.Parent.Materiales)
+
 local GenerarMundo = {}
+
+-- Texturas realistas (PBR) para el terreno, sacadas de dos paquetes de la tienda:
+--   10841357434 -> materiales oficiales de Roblox de su demo realista "Duvall Drive"
+--   9408271791  -> paquete PBR (hierba, arena, pizarra)
+-- escala = cada cuántos studs se repite la textura (más grande = menos repetición)
+local MATERIALES_TERRENO = {
+	{ id = 9408271791, nombre = "Grass_PBR", base = Enum.Material.Grass, escala = 10 },
+	{ id = 9408271791, nombre = "Sand_PBR", base = Enum.Material.Sand, escala = 12 },
+	{ id = 9408271791, nombre = "Slate_PBR", base = Enum.Material.Slate, escala = 14 },
+	{ id = 9408271791, nombre = "Slate_PBR", base = Enum.Material.Rock, escala = 18 },
+	{ id = 10841357434, nombre = "Mud MV", base = Enum.Material.Mud, escala = 10 },
+	{ id = 10841357434, nombre = "Gravel MV", base = Enum.Material.Ground, escala = 10 },
+}
 
 local M = Enum.Material
 
@@ -146,6 +161,9 @@ function GenerarMundo.Generar()
 
 	carpeta.Parent = Workspace
 	crearIluminacion()
+
+	print("[MUNDO] Materiales realistas...")
+	Materiales.Aplicar(MATERIALES_TERRENO)
 
 	print(string.format("[MUNDO] %d puentes", puentes))
 	print(string.format("[MUNDO] ¡Listo en %.0f segundos! Ahora guarda: File > Save", os.clock() - inicio))
