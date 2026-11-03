@@ -1,15 +1,18 @@
 -- Valida las esquivas en el servidor y da la invulnerabilidad.
 -- Ruta en Studio: ServerScriptService/Combate/EsquivaServicio
 -- El cliente mueve al personaje (para que se sienta instantáneo),
--- pero el SERVIDOR decide si la esquiva es válida, cobra la estamina
--- y es el único que marca al personaje como invulnerable.
+-- pero el SERVIDOR decide si la esquiva es válida, cobra la estamina,
+-- marca al personaje como invulnerable y avisa a los demás jugadores
+-- para que también vean la voltereta.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Config.CombateConfig).Esquiva
 local EstaminaServicio = require(script.Parent.EstaminaServicio)
 
 local RemotoEsquivar = ReplicatedStorage.Remotes.Esquivar
+local RemotoEfecto = ReplicatedStorage.Remotes.EfectoEsquiva
 
 local EsquivaServicio = {}
 
@@ -27,7 +30,20 @@ local function obtenerPersonajeVivo(jugador)
 	return personaje
 end
 
-local function alPedirEsquiva(jugador)
+-- Nunca confiamos en lo que manda el cliente: comprobamos la dirección
+local function limpiarDireccion(direccion)
+	if typeof(direccion) ~= "Vector3" then
+		return nil
+	end
+	local plana = Vector3.new(direccion.X, 0, direccion.Z)
+	local largo = plana.Magnitude
+	if largo ~= largo or largo < 0.01 or largo > 10 then -- largo ~= largo detecta NaN
+		return nil
+	end
+	return plana / largo
+end
+
+local function alPedirEsquiva(jugador, direccion)
 	local personaje = obtenerPersonajeVivo(jugador)
 	if not personaje then
 		return
@@ -47,6 +63,17 @@ local function alPedirEsquiva(jugador)
 	personaje:SetAttribute("Invulnerable", true)
 	print("[ESQUIVA]", jugador.Name, "es invulnerable. Estamina:", EstaminaServicio.Obtener(jugador))
 
+	-- Avisar a los DEMÁS jugadores para que vean la voltereta
+	local raiz = personaje:FindFirstChild("HumanoidRootPart")
+	local direccionFinal = limpiarDireccion(direccion)
+		or (raiz and -raiz.CFrame.LookVector)
+		or Vector3.new(0, 0, -1)
+	for _, otro in Players:GetPlayers() do
+		if otro ~= jugador then
+			RemotoEfecto:FireClient(otro, personaje, direccionFinal)
+		end
+	end
+
 	task.delay(Config.INVULNERABILIDAD, function()
 		-- Solo la quitamos si no hubo otra esquiva después
 		if personaje.Parent and ultimaEsquiva[jugador] == ahora then
@@ -63,7 +90,7 @@ end
 
 function EsquivaServicio.Iniciar()
 	RemotoEsquivar.OnServerEvent:Connect(alPedirEsquiva)
-	game:GetService("Players").PlayerRemoving:Connect(function(jugador)
+	Players.PlayerRemoving:Connect(function(jugador)
 		ultimaEsquiva[jugador] = nil
 	end)
 end

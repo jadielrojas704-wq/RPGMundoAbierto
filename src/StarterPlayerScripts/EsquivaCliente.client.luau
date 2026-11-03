@@ -1,4 +1,4 @@
--- Lee la tecla de esquiva, mueve al personaje y muestra los efectos.
+-- Lee la tecla de esquiva, mueve al personaje y muestra la voltereta.
 -- Ruta en Studio: StarterPlayer/StarterPlayerScripts/EsquivaCliente
 -- Este script SOLO maneja input y efectos. La estamina y la invulnerabilidad
 -- las decide el servidor (ServerScriptService/Combate/EsquivaServicio).
@@ -7,11 +7,13 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
-local Debris = game:GetService("Debris")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Config.CombateConfig).Esquiva
-local RemotoEsquivar = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Esquivar")
+local EfectoRodar = require(ReplicatedStorage:WaitForChild("Efectos"):WaitForChild("EfectoRodar"))
+local Remotos = ReplicatedStorage:WaitForChild("Remotes")
+local RemotoEsquivar = Remotos:WaitForChild("Esquivar")
+local RemotoEfecto = Remotos:WaitForChild("EfectoEsquiva")
 
 local jugador = Players.LocalPlayer
 local FOV_BASE = 70
@@ -19,41 +21,15 @@ local FOV_BASE = 70
 local ultimaEsquiva = 0
 local esquivando = false
 
--- Nube de polvo en los pies
-local function efectoPolvo(raiz)
-	local adjunto = Instance.new("Attachment")
-	adjunto.Position = Vector3.new(0, -2.5, 0)
-	adjunto.Parent = raiz
-
-	local particulas = Instance.new("ParticleEmitter")
-	particulas.Enabled = false
-	particulas.Lifetime = NumberRange.new(0.3, 0.5)
-	particulas.Speed = NumberRange.new(4, 8)
-	particulas.SpreadAngle = Vector2.new(180, 20)
-	particulas.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.8),
-		NumberSequenceKeypoint.new(1, 2),
-	})
-	particulas.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.4),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	particulas.Color = ColorSequence.new(Color3.fromRGB(200, 190, 170))
-	particulas.Parent = adjunto
-	particulas:Emit(15)
-
-	Debris:AddItem(adjunto, 1)
-end
-
 -- Pequeño "empujón" de la cámara para dar sensación de velocidad
 local function efectoCamara()
 	local camara = Workspace.CurrentCamera
 	if not camara then
 		return
 	end
-	TweenService:Create(camara, TweenInfo.new(0.1), { FieldOfView = FOV_BASE + 8 }):Play()
-	task.delay(0.1, function()
-		TweenService:Create(camara, TweenInfo.new(0.25), { FieldOfView = FOV_BASE }):Play()
+	TweenService:Create(camara, TweenInfo.new(0.1), { FieldOfView = FOV_BASE + 6 }):Play()
+	task.delay(0.15, function()
+		TweenService:Create(camara, TweenInfo.new(0.3), { FieldOfView = FOV_BASE }):Play()
 	end)
 end
 
@@ -80,7 +56,7 @@ local function esquivar()
 		return
 	end
 
-	-- Dirección: hacia donde caminas, o paso atrás si estás quieto
+	-- Dirección: hacia donde caminas, o voltereta hacia atrás si estás quieto
 	local direccion = humanoide.MoveDirection
 	if direccion.Magnitude < 0.1 then
 		direccion = -raiz.CFrame.LookVector
@@ -89,9 +65,9 @@ local function esquivar()
 
 	ultimaEsquiva = os.clock()
 	esquivando = true
-	RemotoEsquivar:FireServer()
+	RemotoEsquivar:FireServer(direccion)
 
-	-- Impulso físico durante la esquiva
+	-- Impulso físico durante la voltereta
 	local adjunto = Instance.new("Attachment")
 	adjunto.Parent = raiz
 
@@ -104,7 +80,7 @@ local function esquivar()
 	velocidad.RelativeTo = Enum.ActuatorRelativeTo.World
 	velocidad.Parent = raiz
 
-	efectoPolvo(raiz)
+	EfectoRodar.Reproducir(personaje, direccion, Config.DURACION)
 	efectoCamara()
 
 	task.delay(Config.DURACION, function()
@@ -120,5 +96,12 @@ UserInputService.InputBegan:Connect(function(input, procesadoPorJuego)
 	end
 	if input.KeyCode == Config.TECLA or input.KeyCode == Config.BOTON_MANDO then
 		esquivar()
+	end
+end)
+
+-- Cuando OTRO jugador esquiva, el servidor nos avisa y vemos su voltereta
+RemotoEfecto.OnClientEvent:Connect(function(personaje, direccion)
+	if typeof(personaje) == "Instance" and typeof(direccion) == "Vector3" then
+		EfectoRodar.Reproducir(personaje, direccion, Config.DURACION)
 	end
 end)

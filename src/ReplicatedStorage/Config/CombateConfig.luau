@@ -13,10 +13,10 @@ CombateConfig.Estamina = {
 
 CombateConfig.Esquiva = {
 	COSTO_ESTAMINA = 20,
-	DURACION = 0.3, -- cuánto dura el impulso
-	INVULNERABILIDAD = 0.25, -- segundos en los que no recibes daño (i-frames)
-	ENFRIAMIENTO = 0.6, -- tiempo mínimo entre esquivas
-	VELOCIDAD = 50, -- velocidad del impulso (studs por segundo)
+	DURACION = 0.45, -- cuánto dura la voltereta
+	INVULNERABILIDAD = 0.3, -- segundos en los que no recibes daño (i-frames)
+	ENFRIAMIENTO = 0.7, -- tiempo mínimo entre esquivas
+	VELOCIDAD = 38, -- velocidad del impulso (studs por segundo)
 	TECLA = Enum.KeyCode.Q,
 	BOTON_MANDO = Enum.KeyCode.ButtonB,
 }
