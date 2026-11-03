@@ -11,10 +11,10 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Regiones = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("RegionesConfig"))
+local ClimaConfig = require(ReplicatedStorage.Config:WaitForChild("ClimaConfig"))
 
 local jugador = Players.LocalPlayer
 local TEXTURA_HUMO = "rbxasset://textures/particles/smoke_main.dds"
-local TRANSICION = TweenInfo.new(4, Enum.EasingStyle.Sine)
 local ESPERA_CARTEL = 25 -- segundos antes de volver a mostrar el nombre de la misma región
 
 local regionActual = nil
@@ -148,28 +148,83 @@ end)
 
 -- ===== CAMBIO DE REGIÓN =====
 
-local function aplicarAmbiente(nombreRegion)
+-- Ajusta el ambiente de la región según el clima (lluvia, niebla, tormenta de arena...)
+local function ambienteConClima(region, nombreRegion)
+	local clima = ClimaConfig.CLIMAS[Workspace:GetAttribute("Clima") or "Despejado"] or ClimaConfig.CLIMAS.Despejado
+	local base = region.atmosfera
+	local niebla = clima.niebla
+	local oscuridad = clima.oscuridad
+	local lluvia = clima.precipitacion
+
+	-- Tormenta de arena: en el desierto, el viento fuerte llena el aire de polvo
+	local arena = 0
+	if nombreRegion == "Desierto" then
+		arena = math.clamp((Workspace.GlobalWind.Magnitude - ClimaConfig.VIENTO_TORMENTA_ARENA * 0.6) / ClimaConfig.VIENTO_TORMENTA_ARENA, 0, 1)
+		lluvia = 0
+	end
+
+	local gris = Color3.fromRGB(150, 152, 156)
+	local atmosfera = {
+		Density = math.clamp(base.Density + niebla * 0.35 + lluvia * 0.12 + arena * 0.3, 0, 0.9),
+		Haze = math.clamp(base.Haze + niebla * 3 + lluvia * 1.2 + arena * 3, 0, 10),
+		Glare = base.Glare * (1 - math.max(oscuridad, arena)),
+		Color = base.Color:Lerp(gris, math.max(lluvia, niebla) * 0.5):Lerp(Color3.fromRGB(205, 170, 120), arena * 0.7),
+		Decay = base.Decay:Lerp(Color3.fromRGB(70, 74, 80), oscuridad * 0.6),
+	}
+	local filtro = region.color
+	local color = {
+		TintColor = filtro.TintColor:Lerp(Color3.fromRGB(215, 225, 235), lluvia * 0.4),
+		Saturation = filtro.Saturation - oscuridad * 0.25,
+		Contrast = filtro.Contrast,
+		Brightness = filtro.Brightness - oscuridad * 0.08,
+	}
+	return atmosfera, color
+end
+
+local function aplicarAmbiente(nombreRegion, mostrarNombre, duracion)
 	local region = Regiones.REGIONES[nombreRegion]
 	if not region then
 		return
 	end
+	local transicion = TweenInfo.new(duracion or 4, Enum.EasingStyle.Sine)
+	local objetivoAtmosfera, objetivoColor = ambienteConClima(region, nombreRegion)
 
 	local atmosfera = Lighting:FindFirstChildOfClass("Atmosphere")
 	if atmosfera then
-		TweenService:Create(atmosfera, TRANSICION, region.atmosfera):Play()
+		TweenService:Create(atmosfera, transicion, objetivoAtmosfera):Play()
 	end
 	local color = Lighting:FindFirstChild("ColorRegion")
 	if color then
-		TweenService:Create(color, TRANSICION, region.color):Play()
+		TweenService:Create(color, transicion, objetivoColor):Play()
+	end
+
+	if not mostrarNombre then
+		return
 	end
 	cambiarParticulas(region)
-
 	local ahora = os.clock()
 	if not ultimoCartel[nombreRegion] or ahora - ultimoCartel[nombreRegion] > ESPERA_CARTEL then
 		ultimoCartel[nombreRegion] = ahora
 		mostrarCartel(region.nombre)
 	end
 end
+
+-- Cuando cambia el clima, el ambiente se ajusta poco a poco
+Workspace:GetAttributeChangedSignal("Clima"):Connect(function()
+	if regionActual then
+		aplicarAmbiente(regionActual, false, ClimaConfig.TRANSICION)
+	end
+end)
+
+-- En el desierto el viento cambia la tormenta de arena: revisamos de vez en cuando
+task.spawn(function()
+	while true do
+		task.wait(8)
+		if regionActual == "Desierto" then
+			aplicarAmbiente(regionActual, false, 8)
+		end
+	end
+end)
 
 while true do
 	local personaje = jugador.Character
@@ -178,7 +233,7 @@ while true do
 		local nombreRegion = Regiones.RegionEn(raiz.Position)
 		if nombreRegion ~= regionActual then
 			regionActual = nombreRegion
-			aplicarAmbiente(nombreRegion)
+			aplicarAmbiente(nombreRegion, true)
 		end
 	end
 	task.wait(0.5)

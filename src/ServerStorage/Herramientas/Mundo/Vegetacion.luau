@@ -7,7 +7,6 @@
 -- Los árboles con hojas llevan un emisor de hojas que caen y vuelan con el viento.
 
 local CollectionService = game:GetService("CollectionService")
-local InsertService = game:GetService("InsertService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Regiones = require(ReplicatedStorage.Config.RegionesConfig)
@@ -575,26 +574,155 @@ local function esDesierto(d)
 	return d.desierto + d.borde > 0.55
 end
 
-function Vegetacion.Generar(mundo)
-	-- Textura de hoja: se busca la imagen dentro del decal de la tienda
-	local ok, resultado = pcall(function()
-		local modelo = InsertService:LoadAsset(ID_HOJA)
-		local decal = modelo:FindFirstChildWhichIsA("Decal", true)
-		local textura = decal and decal.Texture
-		modelo:Destroy()
-		return textura
-	end)
-	if ok and resultado then
-		texturaHoja = resultado
-	else
-		local ok2, objetos = pcall(function()
-			return game:GetObjects("rbxassetid://" .. ID_HOJA)
-		end)
-		if ok2 and objetos[1] and objetos[1]:IsA("Decal") then
-			texturaHoja = objetos[1].Texture
-		else
-			warn("[MUNDO] No pude cargar la textura de hoja; uso una de reserva")
+-- ===== MODELOS 3D REALISTAS (de la tienda de Roblox) =====
+-- Revisados uno a uno: son mallas 3D con texturas y NO traen scripts.
+-- Aun así, al cargarlos se borra cualquier script por seguridad (Catalogo.Limpiar).
+-- alto = altura final en studs (un personaje mide unos 5 studs)
+local MODELOS = {
+	Haya = { id = 8549269563, alto = { 34, 48 }, balanceo = 0.7, hojasCaen = Color3.fromRGB(120, 130, 60) },
+	HayaGrande = { id = 7974633518, alto = { 48, 66 }, balanceo = 0.5, hojasCaen = Color3.fromRGB(120, 130, 60) },
+	HayaJoven = { id = 9559507124, alto = { 10, 16 }, balanceo = 1.6, hojasCaen = Color3.fromRGB(120, 130, 60) },
+	HojaAncha = { id = 8311837663, alto = { 30, 44 }, balanceo = 0.7, hojasCaen = Color3.fromRGB(150, 130, 55) },
+	Cornejo = { id = 8311847129, alto = { 16, 24 }, balanceo = 1.1, hojasCaen = Color3.fromRGB(190, 120, 90) },
+	Secuoya = { id = 6738079386, alto = { 75, 110 }, balanceo = 0.3 },
+	Pantano = { id = 8549274603, alto = { 30, 46 }, balanceo = 0.5, hojasCaen = Color3.fromRGB(70, 70, 45) },
+	Helecho = { id = 8311863188, alto = { 2.5, 4.5 }, balanceo = 4 },
+	Arbusto = { id = 7974743121, alto = { 4, 8 }, balanceo = 2.5 },
+	Roca = { id = 11902901882, alto = { 6, 20 }, balanceo = nil },
+	-- Desierto (plantilla oficial de carreras de Roblox)
+	Cactus = { id = 16176167405, alto = { 8, 16 }, balanceo = nil },
+	Agave = { id = 16176165366, alto = { 2.5, 4.5 }, balanceo = 1 },
+	Rodadora = { id = 16176163654, alto = { 2.5, 4 }, balanceo = 3 },
+}
+
+local Catalogo = require(script.Parent.Parent.Catalogo)
+local plantillas = {}
+
+-- Carga un modelo de la tienda y lo deja listo para copiarlo muchas veces
+local function prepararPlantilla(nombre, datos)
+	local modelo, informe = Catalogo.Cargar(datos.id)
+	if not modelo then
+		warn("[MUNDO] No pude cargar", nombre, datos.id, informe)
+		return
+	end
+	local piezas, mallas = 0, 0
+	for _, p in modelo:GetDescendants() do
+		if p:IsA("BasePart") then
+			piezas += 1
+			if p:IsA("MeshPart") then
+				mallas += 1
+			end
+			p.Anchored = true
+			p.CanCollide = false -- las hojas no deben bloquear; el tronco tiene su propio colisionador
+			p.CanQuery = false
+			p.CanTouch = false
 		end
+	end
+	-- Seguridad y rendimiento: solo modelos de mallas y con pocas piezas
+	if mallas == 0 or piezas > 60 then
+		warn("[MUNDO] Descarto", nombre, "(", piezas, "piezas,", mallas, "mallas )")
+		modelo:Destroy()
+		return
+	end
+	print("[MUNDO] Modelo listo:", nombre, informe)
+	plantillas[nombre] = modelo
+end
+
+-- La pieza con más superficie horizontal suele ser la copa (para soltar hojas)
+local function buscarCopa(modelo)
+	local mejor, area = nil, 0
+	for _, p in modelo:GetDescendants() do
+		if p:IsA("BasePart") and p.Size.X * p.Size.Z > area then
+			mejor, area = p, p.Size.X * p.Size.Z
+		end
+	end
+	return mejor
+end
+
+-- Coloca una copia de un modelo realista en el suelo
+local function colocarModelo(nombre, base, carpeta, escalaExtra)
+	local plantilla = plantillas[nombre]
+	if not plantilla then
+		return nil
+	end
+	local datos = MODELOS[nombre]
+	local copia = plantilla:Clone()
+
+	-- Tamaño al azar dentro del rango, y giro al azar
+	local _, tamano = copia:GetBoundingBox()
+	local altoFinal = n(datos.alto[1], datos.alto[2]) * (escalaExtra or 1)
+	pcall(function()
+		copia:ScaleTo(copia:GetScale() * altoFinal / math.max(tamano.Y, 0.1))
+	end)
+	-- Giro alrededor del eje vertical del mundo, sin cambiar cómo viene orientado el modelo
+	local pivote = copia:GetPivot()
+	copia:PivotTo(CFrame.new(pivote.Position) * CFrame.Angles(0, n(0, math.pi * 2), 0) * pivote.Rotation)
+
+	-- Apoyarlo en el suelo (un poco hundido para que no flote en las cuestas)
+	local caja, tamanoFinal = copia:GetBoundingBox()
+	local fondo = caja.Position.Y - tamanoFinal.Y / 2
+	local hundir = tamanoFinal.Y * 0.03 + 0.4
+	copia:PivotTo(copia:GetPivot() + Vector3.new(base.X - caja.Position.X, base.Y - hundir - fondo, base.Z - caja.Position.Z))
+
+	-- Colisionador invisible en el tronco para no atravesar los árboles
+	if datos.balanceo and tamanoFinal.Y > 12 then
+		local grosor = math.clamp(tamanoFinal.Y * 0.035, 1.2, 4)
+		parte({
+			Name = "Colision",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(tamanoFinal.Y * 0.4, grosor, grosor),
+			CFrame = CFrame.new(base + Vector3.new(0, tamanoFinal.Y * 0.2, 0)) * CFrame.Angles(0, 0, math.pi / 2),
+			Transparency = 1,
+			CanCollide = true,
+			CanQuery = false,
+			Parent = copia,
+		})
+	elseif not datos.balanceo then
+		-- Las rocas sí son sólidas
+		for _, p in copia:GetDescendants() do
+			if p:IsA("BasePart") then
+				p.CanCollide = true
+			end
+		end
+	end
+
+	if datos.hojasCaen then
+		local copa = buscarCopa(copia)
+		if copa then
+			hojasQueCaen(copa, datos.hojasCaen, 0.4)
+		end
+	end
+
+	if datos.balanceo then
+		copia.Name = nombre
+		return terminarModelo(copia, base, datos.balanceo, carpeta)
+	end
+	copia.Parent = carpeta
+	return copia
+end
+
+-- Pone un modelo realista; si no se pudo cargar, usa el de piezas como plan B
+local function plantar(nombre, base, carpeta, planB, escalaExtra)
+	if not colocarModelo(nombre, base, carpeta, escalaExtra) and planB then
+		planB(base, carpeta)
+	end
+end
+
+function Vegetacion.Generar(mundo)
+	-- Textura de hoja: la imagen está dentro de un decal de la tienda
+	local ok, objetos = pcall(function()
+		return game:GetObjects("rbxassetid://" .. ID_HOJA)
+	end)
+	if ok and objetos[1] and objetos[1]:IsA("Decal") then
+		texturaHoja = objetos[1].Texture
+	else
+		warn("[MUNDO] No pude cargar la textura de hoja; uso una de reserva")
+	end
+
+	print("[MUNDO] Cargando modelos 3D realistas...")
+	for nombre, datos in MODELOS do
+		prepararPlantilla(nombre, datos)
+		task.wait()
 	end
 
 	local function carpeta(nombre)
@@ -609,92 +737,130 @@ function Vegetacion.Generar(mundo)
 	local cMontana = carpeta("Montanas")
 
 	local cuenta = {}
+	local function robleB(pos, c)
+		arbolHojas(pos, c, ROBLE)
+	end
+	local function abedulB(pos, c)
+		arbolHojas(pos, c, ABEDUL)
+	end
+	local function abetoOscuroB(pos, c)
+		abeto(pos, c, true)
+	end
+	local function abetoB(pos, c)
+		abeto(pos, c, false)
+	end
+	local function arbustoVerdeB(pos, c)
+		arbusto(pos, c, { Color3.fromRGB(80, 108, 48), Color3.fromRGB(96, 116, 52) })
+	end
+	local function arbustoOscuroB(pos, c)
+		arbusto(pos, c, { Color3.fromRGB(36, 48, 34), Color3.fromRGB(46, 52, 36) })
+	end
+	local function rocaB(pos, c)
+		roca(pos, c, M.Rock, Color3.fromRGB(116, 110, 102))
+	end
 
-	-- Bosque normal
+	-- ===== Bosque normal =====
 	print("[MUNDO] Plantando el bosque normal...")
-	cuenta.robles = sembrar(230, 9000, function(d, p)
-		return esBosque(d) and p < 0.55 and d.manchas < 0.25
+	cuenta.hayas = sembrar(130, 9000, function(d, p)
+		return esBosque(d) and p < 0.5 and d.manchas < 0.25
 	end, function(pos)
-		arbolHojas(pos, cBosque, ROBLE)
+		plantar(if rng:NextNumber() < 0.22 then "HayaGrande" else "Haya", pos, cBosque, robleB)
 	end)
-	cuenta.abedules = sembrar(80, 5000, function(d, p)
+	cuenta.hojaAncha = sembrar(70, 6000, function(d, p)
 		return esBosque(d) and p < 0.5
 	end, function(pos)
-		arbolHojas(pos, cBosque, ABEDUL)
+		plantar("HojaAncha", pos, cBosque, robleB)
 	end)
-	sembrar(160, 5000, function(d, p)
+	sembrar(50, 5000, function(d, p)
+		return esBosque(d) and p < 0.5
+	end, function(pos)
+		plantar("Cornejo", pos, cBosque, abedulB)
+	end)
+	sembrar(70, 5000, function(d, p)
+		return esBosque(d) and p < 0.55
+	end, function(pos)
+		plantar("HayaJoven", pos, cBosque, arbustoVerdeB)
+	end)
+	sembrar(170, 6000, function(d, p)
 		return esBosque(d) and p < 0.6
 	end, function(pos)
-		arbusto(pos, cBosque, { Color3.fromRGB(80, 108, 48), Color3.fromRGB(96, 116, 52) })
+		plantar("Arbusto", pos, cBosque, arbustoVerdeB)
 	end)
-	sembrar(80, 4000, function(d, p)
+	sembrar(220, 6000, function(d, p)
+		return esBosque(d) and p < 0.5 and d.manchas < 0.15
+	end, function(pos)
+		plantar("Helecho", pos, cBosque, nil)
+	end)
+	sembrar(70, 4000, function(d, p)
 		return esBosque(d) and p < 0.3 and d.manchas < 0.1
 	end, function(pos)
 		flores(pos, cBosque)
 	end)
-	sembrar(90, 4000, function(d, p)
+	sembrar(70, 4000, function(d, p)
 		return esBosque(d) and (p > 0.4 or rng:NextNumber() < 0.2)
 	end, function(pos)
-		roca(pos, cBosque, M.Rock, Color3.fromRGB(116, 110, 102))
+		plantar("Roca", pos, cBosque, rocaB)
 	end)
 
-	-- Bosque oscuro: denso
+	-- ===== Bosque oscuro: secuoyas enormes y árboles de pantano =====
 	print("[MUNDO] Plantando el bosque oscuro...")
-	cuenta.abetos = sembrar(260, 9000, function(d, p)
+	cuenta.secuoyas = sembrar(170, 9000, function(d, p)
+		return esOscuro(d) and p < 0.7 and d.pantano < 0.2
+	end, function(pos)
+		plantar("Secuoya", pos, cOscuro, abetoOscuroB)
+	end)
+	cuenta.pantano = sembrar(95, 6000, function(d, p)
 		return esOscuro(d) and p < 0.7
 	end, function(pos)
-		abeto(pos, cOscuro, true)
-	end)
-	cuenta.muertos = sembrar(110, 5000, function(d, p)
-		return esOscuro(d) and p < 0.8
-	end, function(pos)
-		arbolMuerto(pos, cOscuro, Color3.fromRGB(58, 54, 50))
-	end)
-	sembrar(40, 3000, function(d, p)
-		return esOscuro(d) and p < 0.5
-	end, function(pos)
-		arbolHojas(pos, cOscuro, ROBLE_OSCURO)
+		plantar("Pantano", pos, cOscuro, function(posicion, c)
+			arbolMuerto(posicion, c, Color3.fromRGB(58, 54, 50))
+		end)
 	end)
 	sembrar(70, 4000, function(d, p)
 		return esOscuro(d) and p < 0.5
 	end, function(pos)
 		hongos(pos, cOscuro)
 	end)
-	sembrar(80, 3000, function(d, p)
+	sembrar(170, 5000, function(d, p)
 		return esOscuro(d) and p < 0.6
 	end, function(pos)
-		arbusto(pos, cOscuro, { Color3.fromRGB(36, 48, 34), Color3.fromRGB(46, 52, 36) })
+		plantar("Helecho", pos, cOscuro, nil, 1.3)
 	end)
-	sembrar(90, 4000, function(d, p)
+	sembrar(60, 3000, function(d, p)
+		return esOscuro(d) and p < 0.6
+	end, function(pos)
+		plantar("Arbusto", pos, cOscuro, arbustoOscuroB)
+	end)
+	sembrar(70, 4000, function(d, p)
 		return esOscuro(d) and (p > 0.4 or rng:NextNumber() < 0.25)
 	end, function(pos)
-		roca(pos, cOscuro, M.Basalt, Color3.fromRGB(58, 56, 56))
+		plantar("Roca", pos, cOscuro, function(posicion, c)
+			roca(posicion, c, M.Basalt, Color3.fromRGB(58, 56, 56))
+		end)
 	end)
 
-	-- Desierto
+	-- ===== Desierto (cactus, palmeras y matorrales hechos a mano) =====
 	print("[MUNDO] Llenando el desierto...")
-	cuenta.cactus = sembrar(110, 6000, function(d, p)
+	cuenta.cactus = sembrar(120, 6000, function(d, p)
 		return esDesierto(d) and p < 0.45 and d.meseta < 0.3
 	end, function(pos)
-		cactus(pos, cDesierto)
+		plantar("Cactus", pos, cDesierto, cactus)
 	end)
-	sembrar(90, 4000, function(d, p)
+	sembrar(110, 5000, function(d, p)
 		return esDesierto(d) and p < 0.5
 	end, function(pos)
-		matorralSeco(pos, cDesierto)
+		plantar("Agave", pos, cDesierto, matorralSeco)
 	end)
-	sembrar(30, 3000, function(d, p)
-		return esDesierto(d) and p < 0.5
+	sembrar(60, 4000, function(d, p)
+		return esDesierto(d) and p < 0.4
 	end, function(pos)
-		arbolMuerto(pos, cDesierto, Color3.fromRGB(150, 132, 108))
+		plantar("Rodadora", pos, cDesierto, matorralSeco)
 	end)
 	sembrar(110, 5000, function(d, p)
 		return esDesierto(d) and (p > 0.35 or rng:NextNumber() < 0.3)
 	end, function(pos)
 		roca(pos, cDesierto, M.Sandstone, Color3.fromRGB(168, 100, 64), 1.3)
 	end)
-
-	-- Palmeras alrededor del oasis
 	local oasis = Terreno.OASIS
 	for i = 1, 9 do
 		local angulo = i / 9 * math.pi * 2 + n(-0.2, 0.2)
@@ -706,26 +872,32 @@ function Vegetacion.Generar(mundo)
 		end
 	end
 
-	-- Montañas: abetos en las laderas bajas y rocas
+	-- ===== Montañas =====
 	print("[MUNDO] Montañas...")
-	sembrar(70, 4000, function(d, p)
+	sembrar(60, 4000, function(d, p)
 		return d.montana > 0.5 and d.altura < 150 and p < 0.7
 	end, function(pos)
-		abeto(pos, cMontana, false)
+		plantar("Secuoya", pos, cMontana, abetoB, 0.6)
 	end)
-	sembrar(80, 4000, function(d, p)
+	sembrar(70, 4000, function(d, p)
 		return d.montana > 0.5 and p > 0.3
 	end, function(pos)
-		roca(pos, cMontana, M.Slate, Color3.fromRGB(96, 94, 90), 1.4)
+		plantar("Roca", pos, cMontana, function(posicion, c)
+			roca(posicion, c, M.Slate, Color3.fromRGB(96, 94, 90), 1.4)
+		end, 1.4)
 	end)
+
+	for _, plantilla in plantillas do
+		plantilla:Destroy()
+	end
 
 	print(
 		string.format(
-			"[MUNDO] %d robles, %d abedules, %d abetos, %d árboles muertos, %d cactus",
-			cuenta.robles,
-			cuenta.abedules,
-			cuenta.abetos,
-			cuenta.muertos,
+			"[MUNDO] %d hayas, %d de hoja ancha, %d secuoyas, %d de pantano, %d cactus",
+			cuenta.hayas,
+			cuenta.hojaAncha,
+			cuenta.secuoyas,
+			cuenta.pantano,
 			cuenta.cactus
 		)
 	)

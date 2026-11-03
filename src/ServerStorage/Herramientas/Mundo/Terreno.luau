@@ -264,13 +264,22 @@ function Terreno.Generar()
 					local x = -MITAD + (ci * TROZO + a - 0.5) * RES
 					local z = -MITAD + (cj * TROZO + b - 0.5) * RES
 					local superficie = Terreno.elegirMaterial(d, pendiente, x, z)
+					-- Material de dentro: es lo que se ve en las paredes empinadas
+					local interior = M.Rock
+					if superficie == M.Sand or superficie == M.Sandstone or d.desierto > 0.5 then
+						interior = M.Sandstone
+					elseif superficie == M.Snow or superficie == M.Slate or d.montana > 0.5 then
+						interior = M.Slate
+					elseif d.oscuro > 0.5 then
+						interior = M.Basalt
+					end
 
 					for k = 1, capas do
 						local fondo = (k - 1) * RES
 						local lleno = math.clamp((h - fondo) / RES, 0, 1)
 						ocupacion[a][k][b] = lleno
 						if lleno > 0 then
-							materiales[a][k][b] = if h - fondo > 10 then M.Rock else superficie
+							materiales[a][k][b] = if h - fondo > 10 then interior else superficie
 						else
 							materiales[a][k][b] = M.Air
 						end

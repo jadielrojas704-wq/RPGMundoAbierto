@@ -300,7 +300,7 @@ local function nubeGrande(posicion, tamano, padre)
 		CFrame = CFrame.new(posicion) * CFrame.Angles(0, n(0, 6.28), 0),
 		Color = Color3.fromRGB(246, 242, 236),
 		Material = M.SmoothPlastic,
-		Transparency = n(0.25, 0.4),
+		Transparency = n(0.62, 0.78), -- muy transparentes: parecen niebla, no bolas
 		CanCollide = false,
 		CanQuery = false,
 		CastShadow = false,
@@ -403,7 +403,7 @@ function Estructuras.Isla(padre)
 		local a, r = n(0, 6.28), n(40, 200)
 		nubeGrande(
 			Vector3.new(isla.X + math.cos(a) * r, isla.Y - n(50, 130), isla.Z + math.sin(a) * r),
-			Vector3.new(n(70, 150), n(25, 45), n(70, 150)),
+			Vector3.new(n(120, 220), n(30, 55), n(120, 220)),
 			modelo
 		)
 	end
