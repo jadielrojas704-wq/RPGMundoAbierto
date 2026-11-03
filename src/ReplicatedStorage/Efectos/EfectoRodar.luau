@@ -19,10 +19,13 @@
 
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Sonidos = require(ReplicatedStorage.Config.SonidosConfig).Esquiva
 local Tipos = require(ReplicatedStorage.Config.CombateConfig).Esquiva.TIPOS
+local EfectosSuelo = require(script.Parent.EfectosSuelo)
 
 local EfectoRodar = {}
 
@@ -319,22 +322,30 @@ function Animaciones.PasoAtras(t, ctx)
 		)
 end
 
--- Momentos en los que suena algo o sale polvo: { t, sonido, volumen relativo, polvo }
+-- Momentos clave de cada esquiva: { t, sonido, volumen relativo, efectos visuales }
+-- Efectos: polvo = nube, onda = anillo de polvo, trozos = piedritas/hierba..., sacudida = cámara
 local EVENTOS = {
 	Rodar = {
-		{ 0, "ROPA", 1, 5 },
-		{ 0.62, "CAIDA", 1, 6 },
-		{ 0.84, "CAIDA", 0.5, 0 }, -- el pie se apoya al levantarse
+		{ 0, "ROPA", 1, { polvo = 0.6 } },
+		{ 0.62, "CAIDA", 1, { polvo = 1, trozos = 3 } },
+		{ 0.84, "CAIDA", 0.5, { polvo = 0.4 } }, -- el pie se apoya al levantarse
 	},
 	Lateral = {
-		{ 0.05, "ROPA", 0.6, 4 },
-		{ 0.68, "CAIDA", 1.3, 7 }, -- los pies tocan el suelo
-		{ 0.74, "CAIDA", 0.35, 0 }, -- la mano se apoya
+		{ 0.05, "ROPA", 0.6, { polvo = 0.7, trozos = 2 } }, -- impulso
+		{ 0.68, "CAIDA", 1.3, { polvo = 1.2, onda = 1, trozos = 5, sacudida = 1 } }, -- los pies tocan el suelo
+		{ 0.74, "CAIDA", 0.35, { polvo = 0.4 } }, -- la mano se apoya
 	},
 	PasoAtras = {
-		{ 0, "ROPA", 0.5, 0 },
-		{ 0.78, "CAIDA", 1.1, 4 },
+		{ 0, "ROPA", 0.5, { polvo = 0.4 } },
+		{ 0.78, "CAIDA", 1.1, { polvo = 0.8, onda = 0.5, trozos = 2 } },
 	},
+}
+
+-- Ventanas en las que el cuerpo arrastra polvo por el suelo: { desde, hasta, intensidad }
+local RASTROS = {
+	Rodar = { 0.12, 0.72, 1 },
+	Lateral = { 0.68, 0.82, 0.6 }, -- pequeño derrape al aterrizar
+	PasoAtras = { 0.78, 0.9, 0.5 },
 }
 
 local RESPIRA_AL_FINAL = { Rodar = true, Lateral = true, PasoAtras = false }
@@ -440,34 +451,40 @@ local function reproducirSonido(parte, id, volumen)
 	Debris:AddItem(sonido, 3)
 end
 
-local function soltarPolvo(raiz, cantidad)
-	if cantidad <= 0 then
-		return
+-- Sacudida muy leve de la cámara (solo para el propio jugador)
+local function sacudirCamara(intensidad)
+	local nombre = "SacudidaEsquiva"
+	local inicio = os.clock()
+	local DURACION = 0.15
+	pcall(function()
+		RunService:UnbindFromRenderStep(nombre)
+	end)
+	RunService:BindToRenderStep(nombre, Enum.RenderPriority.Camera.Value + 1, function()
+		local t = (os.clock() - inicio) / DURACION
+		local camara = Workspace.CurrentCamera
+		if t >= 1 or not camara then
+			RunService:UnbindFromRenderStep(nombre)
+			return
+		end
+		local fuerza = math.rad(0.35) * intensidad * (1 - t)
+		camara.CFrame = camara.CFrame
+			* CFrame.Angles((math.random() - 0.5) * fuerza, (math.random() - 0.5) * fuerza, 0)
+	end)
+end
+
+local function lanzarEfectos(personaje, efectos, direccion)
+	if efectos.polvo then
+		EfectosSuelo.Polvo(personaje, efectos.polvo)
 	end
-	local adjunto = Instance.new("Attachment")
-	adjunto.Position = Vector3.new(0, -2.8, 0)
-	adjunto.Parent = raiz
-
-	local particulas = Instance.new("ParticleEmitter")
-	particulas.Enabled = false
-	particulas.Lifetime = NumberRange.new(0.5, 0.9)
-	particulas.Speed = NumberRange.new(1.5, 3.5)
-	particulas.SpreadAngle = Vector2.new(180, 5)
-	particulas.Acceleration = Vector3.new(0, 0.5, 0)
-	particulas.Drag = 3
-	particulas.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.5),
-		NumberSequenceKeypoint.new(1, 1.8),
-	})
-	particulas.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.7),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	particulas.Color = ColorSequence.new(Color3.fromRGB(150, 140, 125))
-	particulas.Parent = adjunto
-	particulas:Emit(cantidad)
-
-	Debris:AddItem(adjunto, 1.2)
+	if efectos.onda then
+		EfectosSuelo.Onda(personaje, efectos.onda)
+	end
+	if efectos.trozos then
+		EfectosSuelo.Trozos(personaje, efectos.trozos, direccion)
+	end
+	if efectos.sacudida and Players.LocalPlayer.Character == personaje then
+		sacudirCamara(efectos.sacudida)
+	end
 end
 
 local function volumenDe(nombreSonido)
@@ -540,6 +557,9 @@ function EfectoRodar.Reproducir(personaje, direccion, tipo)
 	local siguienteEvento = 1
 	local terminado = false
 	local conexion
+	local rastro = RASTROS[tipo]
+	local apagarRastro = nil
+	local rastroHecho = false
 
 	local function terminar()
 		if terminado then
@@ -552,6 +572,9 @@ function EfectoRodar.Reproducir(personaje, direccion, tipo)
 			pcall(articulacion.poner, articulacion.original)
 		end
 		pcall(restaurarAnimaciones)
+		if apagarRastro then
+			apagarRastro()
+		end
 		rodando[personaje] = nil
 		if raiz.Parent and RESPIRA_AL_FINAL[tipo] and math.random() < Sonidos.PROBABILIDAD_RESPIRACION then
 			reproducirSonido(raiz, elegir(Sonidos.RESPIRACION), Sonidos.VOLUMEN_RESPIRACION)
@@ -569,8 +592,18 @@ function EfectoRodar.Reproducir(personaje, direccion, tipo)
 		while eventos[siguienteEvento] and t >= eventos[siguienteEvento][1] do
 			local evento = eventos[siguienteEvento]
 			reproducirSonido(raiz, elegir(Sonidos[evento[2]]), volumenDe(evento[2]) * evento[3])
-			soltarPolvo(raiz, evento[4])
+			pcall(lanzarEfectos, personaje, evento[4], direccion)
 			siguienteEvento += 1
+		end
+
+		-- Rastro de polvo mientras el cuerpo va pegado al suelo
+		if not apagarRastro and not rastroHecho and t >= rastro[1] then
+			apagarRastro = EfectosSuelo.Rastro(personaje, rastro[3])
+		end
+		if apagarRastro and t >= rastro[2] then
+			apagarRastro()
+			apagarRastro = nil
+			rastroHecho = true
 		end
 
 		local ok, err = pcall(function()
