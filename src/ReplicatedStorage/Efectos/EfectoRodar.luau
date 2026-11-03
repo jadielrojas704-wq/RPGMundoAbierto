@@ -1,16 +1,20 @@
 -- Animación procedural de voltereta (hecha con código, sin archivos de animación).
 -- Ruta en Studio: ReplicatedStorage/Efectos/EfectoRodar
--- Solo se usa en el CLIENTE: gira el cuerpo, encoge brazos y piernas,
--- y añade sonido, polvo y estela. No cambia nada del juego, solo lo visual.
+-- Solo se usa en el CLIENTE: gira el cuerpo, lo agacha, encoge brazos y piernas,
+-- y añade voz, polvo y estela. No cambia nada del juego, solo lo visual.
+--
+-- Funciona con los dos tipos de articulaciones de Roblox:
+--   * Motor6D (personajes clásicos): se mueve su propiedad C0
+--   * AnimationConstraint (personajes nuevos): se mueve su Attachment0
+-- En ambos casos, "C0" y "Attachment0" significan lo mismo: dónde se une la pieza.
 
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Sonidos = require(ReplicatedStorage.Config.SonidosConfig).Esquiva
 
 local EfectoRodar = {}
-
--- Sonidos que ya vienen dentro de Roblox
-local SONIDO_GIRO = "rbxasset://sounds/swordlunge.wav"
-local SONIDO_CAIDA = "rbxasset://sounds/action_jump_land.mp3"
 
 local VUELTAS = 1 -- vueltas completas del cuerpo
 local AGACHE = 1.3 -- cuánto baja el cuerpo en mitad del giro (studs)
@@ -26,35 +30,69 @@ local PLIEGUE = {
 }
 
 local rodando = {} -- [personaje] = true mientras está rodando
+local tipoAvisado = false
 
--- Busca las articulaciones (Motor6D) del personaje, R15 o R6
-local function buscarMotores(personaje)
-	local motores = {}
-	local torsoInferior = personaje:FindFirstChild("LowerTorso")
-	if torsoInferior then
-		motores.raiz = torsoInferior:FindFirstChild("Root")
-		for nombre in PLIEGUE do
-			local motor = personaje:FindFirstChild(nombre, true)
-			if motor and motor:IsA("Motor6D") then
-				motores[nombre] = motor
-			end
-		end
-	else
-		local raiz = personaje:FindFirstChild("HumanoidRootPart")
-		motores.raiz = raiz and raiz:FindFirstChild("RootJoint")
+-- Convierte una articulación (de cualquier tipo) en algo que podemos mover
+local function prepararArticulacion(objeto)
+	if not objeto then
+		return nil
 	end
-	return motores
+	if objeto:IsA("Motor6D") then
+		local original = objeto.C0
+		return {
+			tipo = "Motor6D",
+			original = original,
+			poner = function(cf)
+				objeto.C0 = cf
+			end,
+		}
+	elseif objeto:IsA("AnimationConstraint") and objeto.Attachment0 then
+		local adjunto = objeto.Attachment0
+		local original = adjunto.CFrame
+		return {
+			tipo = "AnimationConstraint",
+			original = original,
+			poner = function(cf)
+				adjunto.CFrame = cf
+			end,
+		}
+	end
+	return nil
+end
+
+local function buscarArticulaciones(personaje)
+	local articulaciones = {}
+	local esR15 = personaje:FindFirstChild("LowerTorso") ~= nil
+	local nombreRaiz = if esR15 then "Root" else "RootJoint"
+
+	articulaciones.raiz = prepararArticulacion(personaje:FindFirstChild(nombreRaiz, true))
+	if esR15 then
+		for nombre in PLIEGUE do
+			articulaciones[nombre] = prepararArticulacion(personaje:FindFirstChild(nombre, true))
+		end
+	end
+	return articulaciones
+end
+
+local function elegir(lista)
+	if typeof(lista) == "table" then
+		return lista[math.random(1, #lista)]
+	end
+	return lista
 end
 
 local function reproducirSonido(parte, id, volumen)
+	if not id then
+		return
+	end
 	local sonido = Instance.new("Sound")
 	sonido.SoundId = id
 	sonido.Volume = volumen
-	sonido.PlaybackSpeed = 0.95 + math.random() * 0.15
+	sonido.PlaybackSpeed = 0.95 + math.random() * 0.1
 	sonido.RollOffMaxDistance = 80
 	sonido.Parent = parte
 	sonido:Play()
-	Debris:AddItem(sonido, 2)
+	Debris:AddItem(sonido, 3)
 end
 
 local function soltarPolvo(raiz, cantidad)
@@ -123,17 +161,16 @@ function EfectoRodar.Reproducir(personaje, direccion, duracion)
 	if not raiz then
 		return
 	end
-	local motores = buscarMotores(personaje)
-	if not motores.raiz then
+	local articulaciones = buscarArticulaciones(personaje)
+	if not articulaciones.raiz then
+		warn("[VOLTERETA] No encontré la articulación principal del personaje")
 		return
 	end
-	rodando[personaje] = true
-
-	-- Guardamos la posición original de cada articulación para restaurarla
-	local originales = {}
-	for nombre, motor in motores do
-		originales[nombre] = motor.C0
+	if not tipoAvisado then
+		tipoAvisado = true
+		print("[VOLTERETA] Tipo de articulaciones:", articulaciones.raiz.tipo)
 	end
+	rodando[personaje] = true
 
 	-- Eje de giro: perpendicular a la dirección de la voltereta
 	local direccionLocal = raiz.CFrame:VectorToObjectSpace(direccion)
@@ -143,7 +180,7 @@ function EfectoRodar.Reproducir(personaje, direccion, duracion)
 	end
 	local eje = Vector3.yAxis:Cross(direccionLocal.Unit)
 
-	reproducirSonido(raiz, SONIDO_GIRO, 0.6)
+	reproducirSonido(raiz, elegir(Sonidos.IMPULSO), Sonidos.VOLUMEN_VOZ)
 	soltarPolvo(raiz, 12)
 	crearEstela(personaje, duracion)
 
@@ -157,14 +194,14 @@ function EfectoRodar.Reproducir(personaje, direccion, duracion)
 		end
 		terminado = true
 		conexion:Disconnect()
-		for nombre, motor in motores do
-			if motor.Parent then
-				motor.C0 = originales[nombre]
-			end
+		-- Devolver cada articulación a su posición original
+		for _, articulacion in articulaciones do
+			pcall(articulacion.poner, articulacion.original)
 		end
 		rodando[personaje] = nil
 		if raiz.Parent then
-			reproducirSonido(raiz, SONIDO_CAIDA, 0.5)
+			reproducirSonido(raiz, Sonidos.CAIDA, Sonidos.VOLUMEN_CAIDA)
+			reproducirSonido(raiz, elegir(Sonidos.ACOMODARSE), Sonidos.VOLUMEN_VOZ * 0.8)
 			soltarPolvo(raiz, 8)
 		end
 	end
@@ -179,15 +216,21 @@ function EfectoRodar.Reproducir(personaje, direccion, duracion)
 		local angulo = suave * math.pi * 2 * VUELTAS
 		local encogido = math.sin(t * math.pi) -- 0 -> 1 -> 0
 
-		motores.raiz.C0 = CFrame.new(0, -AGACHE * encogido, 0)
-			* CFrame.fromAxisAngle(eje, angulo)
-			* originales.raiz
+		local ok, err = pcall(function()
+			local raizArt = articulaciones.raiz
+			raizArt.poner(CFrame.new(0, -AGACHE * encogido, 0) * CFrame.fromAxisAngle(eje, angulo) * raizArt.original)
 
-		for nombre, pliegue in PLIEGUE do
-			local motor = motores[nombre]
-			if motor then
-				motor.C0 = originales[nombre] * CFrame.identity:Lerp(pliegue, encogido)
+			for nombre, pliegue in PLIEGUE do
+				local articulacion = articulaciones[nombre]
+				if articulacion then
+					articulacion.poner(articulacion.original * CFrame.identity:Lerp(pliegue, encogido))
+				end
 			end
+		end)
+		if not ok then
+			warn("[VOLTERETA] Error:", err)
+			terminar()
+			return
 		end
 
 		if t >= 1 then
