@@ -4,7 +4,7 @@
 --
 -- Tres tipos de esquiva (t va de 0 a 1 durante la esquiva):
 --   Rodar     -> manos al suelo, giro sobre un hombro con torsión, apoyo y rebote
---   Lateral   -> impulso, voltereta lateral en el aire (brazo líder primero), aterrizaje
+--   Lateral   -> impulso, voltereta lateral con piernas recogidas, aterrizaje bajo con la mano al suelo
 --   PasoAtras -> brazos atrás para impulsarse, salto hacia atrás, rodillas amortiguan
 --
 -- Trucos de animación para que se vea natural:
@@ -83,24 +83,63 @@ local FLEXION = {
 	Waist = grados(-15),
 }
 
--- Voltereta lateral: el brazo y la pierna "líder" (del lado al que vas) se abren más
-local ESTRELLA_LIDER_DERECHA = {
-	RightShoulder = grados(0, 0, 150),
-	RightElbow = grados(5),
-	RightHip = grados(0, 0, 45),
-	LeftShoulder = grados(0, 0, -95),
-	LeftElbow = grados(20),
-	LeftHip = grados(0, 0, -28),
-	LeftKnee = grados(-20),
+-- ===== Voltereta lateral (con un toque "arácnido", sin exagerar) =====
+-- "Líder" = el lado hacia el que saltas. Cada postura tiene versión derecha e izquierda.
+
+-- En el aire: piernas recogidas (una más que la otra)
+local PIERNAS_AIRE_DERECHA = {
+	RightHip = grados(75, 0, 15),
+	RightKnee = grados(-105),
+	LeftHip = grados(62, 0, -12),
+	LeftKnee = grados(-90),
+	Waist = grados(-12),
 }
-local ESTRELLA_LIDER_IZQUIERDA = {
-	LeftShoulder = grados(0, 0, -150),
-	LeftElbow = grados(5),
-	LeftHip = grados(0, 0, -45),
-	RightShoulder = grados(0, 0, 95),
-	RightElbow = grados(20),
-	RightHip = grados(0, 0, 28),
-	RightKnee = grados(-20),
+local PIERNAS_AIRE_IZQUIERDA = {
+	LeftHip = grados(75, 0, -15),
+	LeftKnee = grados(-105),
+	RightHip = grados(62, 0, 12),
+	RightKnee = grados(-90),
+	Waist = grados(-12),
+}
+
+-- En el aire: brazo líder abierto, el otro recogido cerca del pecho
+local BRAZOS_AIRE_DERECHA = {
+	RightShoulder = grados(0, 0, 125),
+	RightElbow = grados(15),
+	LeftShoulder = grados(35, 0, -55),
+	LeftElbow = grados(75),
+}
+local BRAZOS_AIRE_IZQUIERDA = {
+	LeftShoulder = grados(0, 0, -125),
+	LeftElbow = grados(15),
+	RightShoulder = grados(35, 0, 55),
+	RightElbow = grados(75),
+}
+
+-- Aterrizaje bajo: mano líder hacia el suelo, el otro brazo atrás, cabeza arriba
+local ATERRIZAJE_DERECHA = {
+	RightShoulder = grados(30, 0, 25),
+	RightElbow = grados(10),
+	LeftShoulder = grados(-25, 0, -50),
+	LeftElbow = grados(25),
+	RightHip = grados(60, 0, 20),
+	RightKnee = grados(-95),
+	LeftHip = grados(78, 0, -25),
+	LeftKnee = grados(-112),
+	Waist = grados(-20),
+	Neck = grados(18),
+}
+local ATERRIZAJE_IZQUIERDA = {
+	LeftShoulder = grados(30, 0, -25),
+	LeftElbow = grados(10),
+	RightShoulder = grados(-25, 0, 50),
+	RightElbow = grados(25),
+	LeftHip = grados(60, 0, -20),
+	LeftKnee = grados(-95),
+	RightHip = grados(78, 0, 25),
+	RightKnee = grados(-112),
+	Waist = grados(-20),
+	Neck = grados(18),
 }
 
 -- Paso atrás: primero los brazos van hacia atrás, luego adelante para equilibrar
@@ -215,26 +254,45 @@ end
 
 function Animaciones.Lateral(t, ctx)
 	local izq = ctx.liderIzquierda
-	local impulso = curva(0, 0.12, 0.14, 0.26, t)
-	local vuelo = curva(0.12, 0.4, 0.5, 0.8, t)
-	local aterrizaje = curva(0.72, 0.82, 0.84, 1, t)
-	local estrella = porLados(function(x)
-		return curva(0.14, 0.3, 0.6, 0.78, x)
-	end, t, izq)
-	local flexion = math.max(impulso, aterrizaje)
-	local giro = suave(0.14, 0.76, t) * math.pi * 2
 
-	-- Sube en el aire, baja para impulsarse y para aterrizar, y rebota al final
-	local altura = 1.5 * vuelo - 0.8 * impulso - 0.9 * aterrizaje - 0.25 * bache(0.84, 1, t)
+	-- Fases: impulso -> vuelo con piernas recogidas -> aterrizaje bajo (se mantiene) -> levantarse
+	local impulso = curva(0, 0.1, 0.12, 0.22, t)
+	local vuelo = curva(0.1, 0.35, 0.48, 0.72, t)
+	local piernasAire = porLados(function(x)
+		return curva(0.12, 0.28, 0.55, 0.72, x)
+	end, t, izq)
+	local brazosAire = porLados(function(x)
+		return curva(0.1, 0.25, 0.55, 0.7, x)
+	end, t, izq)
+	local aterrizaje = porLados(function(x)
+		return curva(0.64, 0.75, 0.86, 1, x)
+	end, t, izq)
+	local pesoAterrizaje = aterrizaje.C
+
+	local giro = suave(0.12, 0.7, t) * math.pi * 2
+
+	-- Altura: baja para impulsarse, sube en el aire, aterriza muy bajo y rebota al final
+	local altura = 1.5 * vuelo - 0.8 * impulso - 1.3 * pesoAterrizaje - 0.2 * bache(0.86, 1, t)
+	-- Inclinación hacia delante: un poco en el aire y más en el aterrizaje
+	local inclinacion = math.rad(20) * curva(0.2, 0.4, 0.5, 0.65, t) + math.rad(25) * pesoAterrizaje
 	-- Al despegar el cuerpo se gira un poco hacia donde va
 	local torsion = math.rad(12) * ctx.lado * curva(0.05, 0.2, 0.7, 0.9, t)
 
-	local estrellaPostura = if izq then ESTRELLA_LIDER_IZQUIERDA else ESTRELLA_LIDER_DERECHA
+	local piernas = if izq then PIERNAS_AIRE_IZQUIERDA else PIERNAS_AIRE_DERECHA
+	local brazos = if izq then BRAZOS_AIRE_IZQUIERDA else BRAZOS_AIRE_DERECHA
+	local postura = if izq then ATERRIZAJE_IZQUIERDA else ATERRIZAJE_DERECHA
+
 	local cuerpo = CFrame.new(0, altura, 0)
+		* CFrame.Angles(-inclinacion, 0, 0)
 		* CFrame.fromAxisAngle(ctx.ejeRecto, giro)
 		* CFrame.Angles(0, torsion, 0)
 	return cuerpo,
-		combinar({ estrellaPostura, estrella }, { FLEXION, flexion }, { EQUILIBRIO, aterrizaje * 0.6 })
+		combinar(
+			{ piernas, piernasAire },
+			{ brazos, brazosAire },
+			{ postura, aterrizaje },
+			{ FLEXION, impulso }
+		)
 end
 
 function Animaciones.PasoAtras(t, ctx)
@@ -270,7 +328,8 @@ local EVENTOS = {
 	},
 	Lateral = {
 		{ 0.05, "ROPA", 0.6, 4 },
-		{ 0.8, "CAIDA", 1.3, 7 },
+		{ 0.68, "CAIDA", 1.3, 7 }, -- los pies tocan el suelo
+		{ 0.74, "CAIDA", 0.35, 0 }, -- la mano se apoya
 	},
 	PasoAtras = {
 		{ 0, "ROPA", 0.5, 0 },

@@ -26,7 +26,7 @@ CombateConfig.Esquiva = {
 	-- FRENADO: cuánto frena al final (0 = nada, 1 = se detiene del todo)
 	TIPOS = {
 		Rodar = { DURACION = 0.62, VELOCIDAD = 42, FRENADO = 0.8 },
-		Lateral = { DURACION = 0.66, VELOCIDAD = 38, FRENADO = 0.75 },
+		Lateral = { DURACION = 0.72, VELOCIDAD = 38, FRENADO = 0.85 },
 		PasoAtras = { DURACION = 0.42, VELOCIDAD = 32, FRENADO = 0.9 },
 	},
 }
