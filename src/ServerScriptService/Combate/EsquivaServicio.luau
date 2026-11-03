@@ -3,7 +3,7 @@
 -- El cliente mueve al personaje (para que se sienta instantáneo),
 -- pero el SERVIDOR decide si la esquiva es válida, cobra la estamina,
 -- marca al personaje como invulnerable y avisa a los demás jugadores
--- para que también vean la voltereta.
+-- para que también vean la animación de la esquiva.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -43,7 +43,14 @@ local function limpiarDireccion(direccion)
 	return plana / largo
 end
 
-local function alPedirEsquiva(jugador, direccion)
+local TIPOS_VALIDOS = { Rodar = true, Lateral = true, PasoAtras = true }
+
+local function alPedirEsquiva(jugador, direccion, tipo)
+	-- El tipo solo cambia la animación; si llega algo raro usamos "Rodar"
+	if typeof(tipo) ~= "string" or not TIPOS_VALIDOS[tipo] then
+		tipo = "Rodar"
+	end
+
 	local personaje = obtenerPersonajeVivo(jugador)
 	if not personaje then
 		return
@@ -61,7 +68,7 @@ local function alPedirEsquiva(jugador, direccion)
 
 	ultimaEsquiva[jugador] = ahora
 	personaje:SetAttribute("Invulnerable", true)
-	print("[ESQUIVA]", jugador.Name, "es invulnerable. Estamina:", EstaminaServicio.Obtener(jugador))
+	print("[ESQUIVA]", jugador.Name, tipo, "- invulnerable. Estamina:", EstaminaServicio.Obtener(jugador))
 
 	-- Avisar a los DEMÁS jugadores para que vean la voltereta
 	local raiz = personaje:FindFirstChild("HumanoidRootPart")
@@ -70,7 +77,7 @@ local function alPedirEsquiva(jugador, direccion)
 		or Vector3.new(0, 0, -1)
 	for _, otro in Players:GetPlayers() do
 		if otro ~= jugador then
-			RemotoEfecto:FireClient(otro, personaje, direccionFinal)
+			RemotoEfecto:FireClient(otro, personaje, direccionFinal, tipo)
 		end
 	end
 
