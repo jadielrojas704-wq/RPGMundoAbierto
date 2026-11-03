@@ -38,24 +38,32 @@ local function cajaInvisible(nombre, tamano)
 	return caja
 end
 
-local cielo = cajaInvisible("ClimaCielo", Vector3.new(140, 2, 140)) -- encima de la cámara
+local cielo = cajaInvisible("ClimaCielo", Vector3.new(70, 2, 70)) -- encima de la cámara
 local suelo = cajaInvisible("ClimaSuelo", Vector3.new(120, 14, 120)) -- a ras de suelo
 
--- Lluvia: partículas finas y estiradas en la dirección en que caen
-local lluvia = Instance.new("ParticleEmitter")
-lluvia.Name = "Lluvia"
-lluvia.Color = ColorSequence.new(Color3.fromRGB(200, 210, 222))
-lluvia.LightInfluence = 1
-lluvia.Transparency = NumberSequence.new(0.45)
-lluvia.Size = NumberSequence.new(0.09)
-lluvia.Squash = NumberSequence.new(-3) -- muy estirada: parece una gota cayendo
-lluvia.Orientation = Enum.ParticleOrientation.VelocityParallel
-lluvia.EmissionDirection = Enum.NormalId.Bottom
-lluvia.Speed = NumberRange.new(80, 95)
-lluvia.SpreadAngle = Vector2.new(3, 3)
-lluvia.Lifetime = NumberRange.new(0.75, 0.9)
-lluvia.Rate = 0
-lluvia.Parent = cielo
+-- Lluvia: partículas estiradas en la dirección en que caen.
+-- Roblox limita cuántas partículas suelta un solo emisor, así que usamos varios.
+local EMISORES_LLUVIA = 6
+local GOTAS_POR_EMISOR = 360 -- por segundo con la lluvia al máximo
+local emisoresLluvia = {}
+for i = 1, EMISORES_LLUVIA do
+	local lluvia = Instance.new("ParticleEmitter")
+	lluvia.Name = "Lluvia" .. i
+	lluvia.Color = ColorSequence.new(Color3.fromRGB(225, 232, 240))
+	lluvia.LightInfluence = 0.6
+	lluvia.LightEmission = 0.15
+	lluvia.Transparency = NumberSequence.new(0.2)
+	lluvia.Size = NumberSequence.new(0.18)
+	lluvia.Squash = NumberSequence.new(-2.5) -- muy estirada: parece una gota cayendo
+	lluvia.Orientation = Enum.ParticleOrientation.VelocityParallel
+	lluvia.EmissionDirection = Enum.NormalId.Bottom
+	lluvia.Speed = NumberRange.new(80, 95)
+	lluvia.SpreadAngle = Vector2.new(3, 3)
+	lluvia.Lifetime = NumberRange.new(0.75, 0.9)
+	lluvia.Rate = 0
+	lluvia.Parent = cielo
+	table.insert(emisoresLluvia, lluvia)
+end
 
 -- Nieve en las montañas
 local nieve = Instance.new("ParticleEmitter")
@@ -265,8 +273,10 @@ RunService.RenderStepped:Connect(function(dt)
 		cantidadArena = math.clamp((fuerzaViento - Config.VIENTO_TORMENTA_ARENA * 0.6) / Config.VIENTO_TORMENTA_ARENA, 0, 1)
 	end
 
-	lluvia.Rate = 900 * cantidadLluvia
-	lluvia.Acceleration = viento * 4 -- el viento inclina la lluvia
+	for _, lluvia in emisoresLluvia do
+		lluvia.Rate = GOTAS_POR_EMISOR * cantidadLluvia
+		lluvia.Acceleration = viento * 4 -- el viento inclina la lluvia
+	end
 	nieve.Rate = 220 * cantidadNieve
 	arena.Rate = 22 * cantidadArena
 	granos.Rate = 180 * cantidadArena
