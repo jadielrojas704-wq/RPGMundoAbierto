@@ -1,12 +1,15 @@
--- Animación procedural de voltereta (hecha con código, sin archivos de animación).
+-- Animación procedural de voltereta estilo Elden Ring (hecha con código).
 -- Ruta en Studio: ReplicatedStorage/Efectos/EfectoRodar
--- Solo se usa en el CLIENTE: gira el cuerpo, lo agacha, encoge brazos y piernas,
--- y añade voz, polvo y estela. No cambia nada del juego, solo lo visual.
+-- Solo se usa en el CLIENTE. No cambia nada del juego, solo lo visual.
+--
+-- Fases de la voltereta (t va de 0 a 1):
+--   0.00 - 0.20  Lanzarse: el cuerpo baja y se encoge
+--   0.08 - 0.72  Rodar: giro completo sobre un hombro, cuerpo pegado al suelo
+--   0.70 - 1.00  Levantarse: se estira y recupera la postura
 --
 -- Funciona con los dos tipos de articulaciones de Roblox:
 --   * Motor6D (personajes clásicos): se mueve su propiedad C0
 --   * AnimationConstraint (personajes nuevos): se mueve su Attachment0
--- En ambos casos, "C0" y "Attachment0" significan lo mismo: dónde se une la pieza.
 
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
@@ -16,21 +19,31 @@ local Sonidos = require(ReplicatedStorage.Config.SonidosConfig).Esquiva
 
 local EfectoRodar = {}
 
-local VUELTAS = 1 -- vueltas completas del cuerpo
-local AGACHE = 1.3 -- cuánto baja el cuerpo en mitad del giro (studs)
+local AGACHE = 1.6 -- cuánto baja el cuerpo al rodar (studs)
+local INCLINACION_HOMBRO = math.rad(25) -- rodar sobre un hombro, no recto
 
--- Cuánto se doblan las articulaciones en el punto más encogido (solo R15)
+-- Postura más encogida (solo personajes R15). Ángulos en grados.
 local PLIEGUE = {
-	LeftHip = CFrame.Angles(math.rad(80), 0, 0),
-	RightHip = CFrame.Angles(math.rad(80), 0, 0),
-	LeftKnee = CFrame.Angles(math.rad(-95), 0, 0),
-	RightKnee = CFrame.Angles(math.rad(-95), 0, 0),
-	LeftShoulder = CFrame.Angles(math.rad(60), 0, 0),
-	RightShoulder = CFrame.Angles(math.rad(60), 0, 0),
+	LeftHip = CFrame.Angles(math.rad(100), 0, 0),
+	RightHip = CFrame.Angles(math.rad(100), 0, 0),
+	LeftKnee = CFrame.Angles(math.rad(-120), 0, 0),
+	RightKnee = CFrame.Angles(math.rad(-120), 0, 0),
+	LeftShoulder = CFrame.Angles(math.rad(70), 0, math.rad(-15)),
+	RightShoulder = CFrame.Angles(math.rad(70), 0, math.rad(15)),
+	LeftElbow = CFrame.Angles(math.rad(80), 0, 0),
+	RightElbow = CFrame.Angles(math.rad(80), 0, 0),
+	Waist = CFrame.Angles(math.rad(-30), 0, 0), -- espalda curvada
+	Neck = CFrame.Angles(math.rad(-35), 0, 0), -- barbilla al pecho
 }
 
 local rodando = {} -- [personaje] = true mientras está rodando
 local tipoAvisado = false
+
+-- Transición suave de 0 a 1 entre los momentos a y b
+local function suave(a, b, t)
+	local x = math.clamp((t - a) / (b - a), 0, 1)
+	return x * x * (3 - 2 * x)
+end
 
 -- Convierte una articulación (de cualquier tipo) en algo que podemos mover
 local function prepararArticulacion(objeto)
@@ -38,20 +51,18 @@ local function prepararArticulacion(objeto)
 		return nil
 	end
 	if objeto:IsA("Motor6D") then
-		local original = objeto.C0
 		return {
 			tipo = "Motor6D",
-			original = original,
+			original = objeto.C0,
 			poner = function(cf)
 				objeto.C0 = cf
 			end,
 		}
 	elseif objeto:IsA("AnimationConstraint") and objeto.Attachment0 then
 		local adjunto = objeto.Attachment0
-		local original = adjunto.CFrame
 		return {
 			tipo = "AnimationConstraint",
-			original = original,
+			original = adjunto.CFrame,
 			poner = function(cf)
 				adjunto.CFrame = cf
 			end,
@@ -89,66 +100,39 @@ local function reproducirSonido(parte, id, volumen)
 	sonido.SoundId = id
 	sonido.Volume = volumen
 	sonido.PlaybackSpeed = 0.95 + math.random() * 0.1
-	sonido.RollOffMaxDistance = 80
+	sonido.RollOffMinDistance = 5
+	sonido.RollOffMaxDistance = 60
 	sonido.Parent = parte
 	sonido:Play()
 	Debris:AddItem(sonido, 3)
 end
 
+-- Polvo discreto pegado al suelo
 local function soltarPolvo(raiz, cantidad)
 	local adjunto = Instance.new("Attachment")
-	adjunto.Position = Vector3.new(0, -2.5, 0)
+	adjunto.Position = Vector3.new(0, -2.8, 0)
 	adjunto.Parent = raiz
 
 	local particulas = Instance.new("ParticleEmitter")
 	particulas.Enabled = false
-	particulas.Lifetime = NumberRange.new(0.35, 0.6)
-	particulas.Speed = NumberRange.new(3, 7)
-	particulas.SpreadAngle = Vector2.new(180, 15)
-	particulas.Drag = 4
+	particulas.Lifetime = NumberRange.new(0.5, 0.9)
+	particulas.Speed = NumberRange.new(1.5, 3.5)
+	particulas.SpreadAngle = Vector2.new(180, 5)
+	particulas.Acceleration = Vector3.new(0, 0.5, 0)
+	particulas.Drag = 3
 	particulas.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.6),
-		NumberSequenceKeypoint.new(1, 2.2),
+		NumberSequenceKeypoint.new(0, 0.5),
+		NumberSequenceKeypoint.new(1, 1.8),
 	})
 	particulas.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.45),
+		NumberSequenceKeypoint.new(0, 0.7),
 		NumberSequenceKeypoint.new(1, 1),
 	})
-	particulas.Color = ColorSequence.new(Color3.fromRGB(205, 195, 175))
+	particulas.Color = ColorSequence.new(Color3.fromRGB(150, 140, 125))
 	particulas.Parent = adjunto
 	particulas:Emit(cantidad)
 
-	Debris:AddItem(adjunto, 1)
-end
-
--- Estela pegada al torso: como el torso gira, dibuja el arco de la voltereta
-local function crearEstela(personaje, duracion)
-	local torso = personaje:FindFirstChild("UpperTorso") or personaje:FindFirstChild("Torso")
-	if not torso then
-		return
-	end
-	local arriba = Instance.new("Attachment")
-	arriba.Position = Vector3.new(0, 0.9, 0)
-	arriba.Parent = torso
-	local abajo = Instance.new("Attachment")
-	abajo.Position = Vector3.new(0, -0.9, 0)
-	abajo.Parent = torso
-
-	local estela = Instance.new("Trail")
-	estela.Attachment0 = arriba
-	estela.Attachment1 = abajo
-	estela.Lifetime = 0.18
-	estela.LightEmission = 0.3
-	estela.Color = ColorSequence.new(Color3.fromRGB(235, 235, 240))
-	estela.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.55),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	estela.Parent = torso
-
-	Debris:AddItem(estela, duracion + 0.3)
-	Debris:AddItem(arriba, duracion + 0.3)
-	Debris:AddItem(abajo, duracion + 0.3)
+	Debris:AddItem(adjunto, 1.2)
 end
 
 -- Reproduce la voltereta en cualquier personaje (el tuyo o el de otro jugador)
@@ -172,20 +156,25 @@ function EfectoRodar.Reproducir(personaje, direccion, duracion)
 	end
 	rodando[personaje] = true
 
-	-- Eje de giro: perpendicular a la dirección de la voltereta
+	-- Dirección de la voltereta vista desde el propio personaje
 	local direccionLocal = raiz.CFrame:VectorToObjectSpace(direccion)
 	direccionLocal = Vector3.new(direccionLocal.X, 0, direccionLocal.Z)
 	if direccionLocal.Magnitude < 0.01 then
 		direccionLocal = Vector3.new(0, 0, -1)
 	end
-	local eje = Vector3.yAxis:Cross(direccionLocal.Unit)
+	direccionLocal = direccionLocal.Unit
 
-	reproducirSonido(raiz, elegir(Sonidos.IMPULSO), Sonidos.VOLUMEN_VOZ)
-	soltarPolvo(raiz, 12)
-	crearEstela(personaje, duracion)
+	-- Eje de giro: de lado a lado, inclinado para rodar sobre un hombro
+	local ejeRecto = Vector3.yAxis:Cross(direccionLocal)
+	local lado = if math.random() < 0.5 then 1 else -1
+	local eje = CFrame.fromAxisAngle(direccionLocal, INCLINACION_HOMBRO * lado):VectorToWorldSpace(ejeRecto)
+
+	reproducirSonido(raiz, elegir(Sonidos.ROPA), Sonidos.VOLUMEN_ROPA)
+	soltarPolvo(raiz, 5)
 
 	local inicio = os.clock()
 	local terminado = false
+	local tocoSuelo = false
 	local conexion
 
 	local function terminar()
@@ -194,15 +183,12 @@ function EfectoRodar.Reproducir(personaje, direccion, duracion)
 		end
 		terminado = true
 		conexion:Disconnect()
-		-- Devolver cada articulación a su posición original
 		for _, articulacion in articulaciones do
 			pcall(articulacion.poner, articulacion.original)
 		end
 		rodando[personaje] = nil
-		if raiz.Parent then
-			reproducirSonido(raiz, Sonidos.CAIDA, Sonidos.VOLUMEN_CAIDA)
-			reproducirSonido(raiz, elegir(Sonidos.ACOMODARSE), Sonidos.VOLUMEN_VOZ * 0.8)
-			soltarPolvo(raiz, 8)
+		if raiz.Parent and math.random() < Sonidos.PROBABILIDAD_RESPIRACION then
+			reproducirSonido(raiz, elegir(Sonidos.RESPIRACION), Sonidos.VOLUMEN_RESPIRACION)
 		end
 	end
 
@@ -212,13 +198,21 @@ function EfectoRodar.Reproducir(personaje, direccion, duracion)
 			return
 		end
 		local t = math.clamp((os.clock() - inicio) / duracion, 0, 1)
-		local suave = t * t * (3 - 2 * t) -- empieza y termina suave
-		local angulo = suave * math.pi * 2 * VUELTAS
-		local encogido = math.sin(t * math.pi) -- 0 -> 1 -> 0
+
+		local giro = suave(0.08, 0.72, t) * math.pi * 2
+		local bajada = AGACHE * (suave(0, 0.2, t) - suave(0.7, 1, t))
+		local encogido = suave(0.05, 0.25, t) - suave(0.62, 0.9, t)
+
+		-- Cuando la espalda vuelve a apoyarse: golpe sordo y algo de polvo
+		if not tocoSuelo and t >= 0.66 then
+			tocoSuelo = true
+			reproducirSonido(raiz, Sonidos.CAIDA, Sonidos.VOLUMEN_CAIDA)
+			soltarPolvo(raiz, 6)
+		end
 
 		local ok, err = pcall(function()
 			local raizArt = articulaciones.raiz
-			raizArt.poner(CFrame.new(0, -AGACHE * encogido, 0) * CFrame.fromAxisAngle(eje, angulo) * raizArt.original)
+			raizArt.poner(CFrame.new(0, -bajada, 0) * CFrame.fromAxisAngle(eje, giro) * raizArt.original)
 
 			for nombre, pliegue in PLIEGUE do
 				local articulacion = articulaciones[nombre]

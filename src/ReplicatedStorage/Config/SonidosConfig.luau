@@ -10,21 +10,23 @@ end
 local SonidosConfig = {}
 
 SonidosConfig.Esquiva = {
-	-- Quejido de impulso al empezar la voltereta (se elige uno al azar)
-	IMPULSO = {
-		id(9120415873), -- Video Game Effects 4 (0.5 s)
-		id(9120415958), -- Video Game Effects 5 (0.5 s)
-		id(9120417141), -- Video Game Effects 21 (0.4 s)
+	-- Roce de la ropa al rodar por el suelo (se elige uno al azar)
+	ROPA = {
+		id(9113824230), -- Cloth Movement 24: deslizar, roce, golpe suave (1.0 s)
+		id(9113823745), -- Cloth Movement 15: deslizar, roce, golpe suave (1.0 s)
+		id(9113822732), -- Cloth Movement 1: deslizar, roce, golpe suave (0.8 s)
 	},
-	-- Exhalación al terminar, como acomodándose
-	ACOMODARSE = {
-		id(9120439971), -- Vocal Blows 3 (0.7 s)
-	},
-	-- Golpe suave del cuerpo contra el suelo (sonido interno de Roblox)
+	-- Golpe sordo del cuerpo al apoyarse en el suelo (sonido interno de Roblox)
 	CAIDA = "rbxasset://sounds/action_jump_land.mp3",
+	-- Respiración suave al levantarse (no siempre suena)
+	RESPIRACION = {
+		id(9120439971), -- Vocal Blows 3: exhalación (0.7 s)
+	},
+	PROBABILIDAD_RESPIRACION = 0.5,
 
-	VOLUMEN_VOZ = 0.7,
-	VOLUMEN_CAIDA = 0.35,
+	VOLUMEN_ROPA = 0.6,
+	VOLUMEN_CAIDA = 0.25,
+	VOLUMEN_RESPIRACION = 0.25,
 }
 
 return SonidosConfig

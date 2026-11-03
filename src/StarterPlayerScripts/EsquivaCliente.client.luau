@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Config.CombateConfig).Esquiva
@@ -27,7 +28,7 @@ local function efectoCamara()
 	if not camara then
 		return
 	end
-	TweenService:Create(camara, TweenInfo.new(0.1), { FieldOfView = FOV_BASE + 6 }):Play()
+	TweenService:Create(camara, TweenInfo.new(0.1), { FieldOfView = FOV_BASE + 3 }):Play()
 	task.delay(0.15, function()
 		TweenService:Create(camara, TweenInfo.new(0.3), { FieldOfView = FOV_BASE }):Play()
 	end)
@@ -83,10 +84,18 @@ local function esquivar()
 	EfectoRodar.Reproducir(personaje, direccion, Config.DURACION)
 	efectoCamara()
 
-	task.delay(Config.DURACION, function()
-		velocidad:Destroy()
-		adjunto:Destroy()
-		esquivando = false
+	-- Sale rápido y va frenando, como un cuerpo real que rueda
+	local inicio = os.clock()
+	local frenado
+	frenado = RunService.Heartbeat:Connect(function()
+		local t = math.clamp((os.clock() - inicio) / Config.DURACION, 0, 1)
+		velocidad.LineVelocity = Config.VELOCIDAD * (1 - Config.FRENADO * t)
+		if t >= 1 then
+			frenado:Disconnect()
+			velocidad:Destroy()
+			adjunto:Destroy()
+			esquivando = false
+		end
 	end)
 end
 
