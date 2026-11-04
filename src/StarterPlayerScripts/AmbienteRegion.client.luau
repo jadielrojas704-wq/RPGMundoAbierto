@@ -18,6 +18,10 @@ local TEXTURA_HUMO = "rbxasset://textures/particles/smoke_main.dds"
 local ESPERA_CARTEL = 25 -- segundos antes de volver a mostrar el nombre de la misma región
 
 local regionActual = nil
+
+local function mezcla(a, b, t)
+	return a + (b - a) * t
+end
 local ultimoCartel = {}
 
 -- ===== CARTEL CON EL NOMBRE DE LA REGIÓN =====
@@ -163,13 +167,28 @@ local function ambienteConClima(region, nombreRegion)
 		lluvia = 0
 	end
 
+	-- Hora del día: atardeceres rosados y noches moradas (toque de fantasía)
+	local _, atardecer, noche = ClimaConfig.Momento(Lighting.ClockTime)
+
 	local gris = Color3.fromRGB(150, 152, 156)
+	-- Noche mágica: el horizonte brilla morado (más bruma de color lila)
+	local densidad = math.clamp(base.Density + niebla * 0.35 + lluvia * 0.12 + arena * 0.3, 0, 0.9)
+	local bruma = math.clamp(base.Haze + niebla * 3 + lluvia * 1.2 + arena * 3, 0, 10)
+	local despejado = 1 - math.max(lluvia, niebla, oscuridad)
+	local magia = noche * despejado
 	local atmosfera = {
-		Density = math.clamp(base.Density + niebla * 0.35 + lluvia * 0.12 + arena * 0.3, 0, 0.9),
-		Haze = math.clamp(base.Haze + niebla * 3 + lluvia * 1.2 + arena * 3, 0, 10),
-		Glare = base.Glare * (1 - math.max(oscuridad, arena)),
-		Color = base.Color:Lerp(gris, math.max(lluvia, niebla) * 0.5):Lerp(Color3.fromRGB(205, 170, 120), arena * 0.7),
-		Decay = base.Decay:Lerp(Color3.fromRGB(70, 74, 80), oscuridad * 0.6),
+		Density = mezcla(densidad, math.max(densidad, 0.28), magia),
+		Haze = mezcla(bruma, math.clamp(bruma, 1.2, 1.6), magia),
+		Glare = (base.Glare + atardecer * 0.6) * (1 - math.max(oscuridad, arena)) * (1 - noche),
+		Color = base.Color
+			:Lerp(Color3.fromRGB(255, 196, 176), atardecer * 0.35)
+			:Lerp(Color3.fromRGB(128, 96, 198), noche * 0.8)
+			:Lerp(gris, math.max(lluvia, niebla) * 0.5)
+			:Lerp(Color3.fromRGB(205, 170, 120), arena * 0.7),
+		Decay = base.Decay
+			:Lerp(Color3.fromRGB(236, 128, 140), atardecer * 0.45)
+			:Lerp(Color3.fromRGB(78, 46, 140), noche * 0.85)
+			:Lerp(Color3.fromRGB(70, 74, 80), oscuridad * 0.6),
 	}
 	local filtro = region.color
 	local color = {
@@ -216,12 +235,13 @@ Workspace:GetAttributeChangedSignal("Clima"):Connect(function()
 	end
 end)
 
--- En el desierto el viento cambia la tormenta de arena: revisamos de vez en cuando
+-- La hora del día (y en el desierto, el viento) cambian el ambiente poco a poco:
+-- lo recalculamos cada pocos segundos con una transición suave
 task.spawn(function()
 	while true do
-		task.wait(8)
-		if regionActual == "Desierto" then
-			aplicarAmbiente(regionActual, false, 8)
+		task.wait(6)
+		if regionActual then
+			aplicarAmbiente(regionActual, false, 6)
 		end
 	end
 end)

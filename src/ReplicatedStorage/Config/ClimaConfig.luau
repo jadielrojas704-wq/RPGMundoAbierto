@@ -10,6 +10,16 @@ local ClimaConfig = {}
 ClimaConfig.MINUTOS_POR_DIA = 24 -- minutos reales que dura un día completo del juego
 ClimaConfig.HORA_INICIAL = 8 -- hora a la que empieza el servidor
 
+-- Cómo de "día", "atardecer" y "noche" es una hora (cada valor de 0 a 1).
+-- Lo usan el servidor (luz) y el cliente (cielo, colores de noche, luciérnagas).
+function ClimaConfig.Momento(hora)
+	local sol = math.sin((hora - 6) / 12 * math.pi) -- 1 mediodía, 0 horizonte, <0 noche
+	local dia = math.clamp(sol * 3, 0, 1)
+	local atardecer = math.clamp(1 - math.abs(sol + 0.02) * 4, 0, 1)
+	local noche = math.clamp(-sol * 4, 0, 1)
+	return dia, atardecer, noche
+end
+
 -- ===== CAMBIOS DE CLIMA =====
 ClimaConfig.DURACION_CLIMA = { 240, 540 } -- segundos que dura cada clima (al azar)
 ClimaConfig.TRANSICION = 40 -- segundos que tarda en pasar de un clima a otro
@@ -26,7 +36,8 @@ ClimaConfig.CAMBIO_VIENTO = { 25, 70 } -- cada cuánto el viento cambia un poco 
 ClimaConfig.CLIMAS = {
 	Despejado = {
 		peso = 40,
-		nubes = { Cover = 0.35, Density = 0.45 },
+		-- algunas nubes blancas grandes: el cielo despejado no queda vacío
+		nubes = { Cover = 0.55, Density = 0.5 },
 		viento = { 2, 7 },
 		precipitacion = 0,
 		niebla = 0,
@@ -34,7 +45,7 @@ ClimaConfig.CLIMAS = {
 	},
 	Nublado = {
 		peso = 24,
-		nubes = { Cover = 0.78, Density = 0.7 },
+		nubes = { Cover = 0.82, Density = 0.7 },
 		viento = { 5, 12 },
 		precipitacion = 0,
 		niebla = 0.1,

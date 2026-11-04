@@ -28,17 +28,21 @@ local Materiales = require(script.Parent.Materiales)
 
 local GenerarMundo = {}
 
--- Texturas realistas (PBR) para el terreno, sacadas de dos paquetes de la tienda:
---   10841357434 -> materiales oficiales de Roblox de su demo realista "Duvall Drive"
---   9408271791  -> paquete PBR (hierba, arena, pizarra)
+-- Texturas realistas (PBR) para el terreno, sacadas de paquetes de la tienda:
+--   9408271791      -> paquete PBR (hierba, pizarra, hormigón)
+--   89475856529538  -> "Grainy Sand" (arena de grano fino, sin dibujo repetido)
+--   108921526633490 -> "Clumpy Dirt" (tierra con terrones, para caminos y claros)
+--   79772032039531  -> "Rough Mud" (barro húmedo de orillas y pantanos)
 -- escala = cada cuántos studs se repite la textura (más grande = menos repetición)
+-- El color final lo da Terreno (SetMaterialColor), que tiñe estas texturas.
 local MATERIALES_TERRENO = {
 	{ id = 9408271791, nombre = "Grass_PBR", base = Enum.Material.Grass, escala = 10 },
-	{ id = 9408271791, nombre = "Sand_PBR", base = Enum.Material.Sand, escala = 12 },
+	{ id = 89475856529538, nombre = "Grainy Sand", base = Enum.Material.Sand, escala = 14 },
 	{ id = 9408271791, nombre = "Slate_PBR", base = Enum.Material.Slate, escala = 14 },
 	{ id = 9408271791, nombre = "Slate_PBR", base = Enum.Material.Rock, escala = 18 },
-	{ id = 10841357434, nombre = "Mud MV", base = Enum.Material.Mud, escala = 10 },
-	{ id = 10841357434, nombre = "Gravel MV", base = Enum.Material.Ground, escala = 10 },
+	{ id = 9408271791, nombre = "Concrete_PBR", base = Enum.Material.Sandstone, escala = 26 },
+	{ id = 79772032039531, nombre = "Rough Mud", base = Enum.Material.Mud, escala = 12 },
+	{ id = 108921526633490, nombre = "Clumpy Dirt", base = Enum.Material.Ground, escala = 12 },
 }
 
 local M = Enum.Material
@@ -129,6 +133,14 @@ local function crearIluminacion()
 	nubes.Density = 0.6
 	nubes.Color = Color3.fromRGB(255, 240, 220)
 	nubes.Parent = Workspace.Terrain
+
+	-- Cielo: muchas estrellas y una luna grande (la noche es morada y mágica)
+	local cielo = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky")
+	cielo.CelestialBodiesShown = true
+	cielo.StarCount = 5000
+	cielo.MoonAngularSize = 22
+	cielo.SunAngularSize = 16
+	cielo.Parent = Lighting
 
 	-- Viento: mueve la hierba del terreno, las hojas que caen, el humo y la arena
 	Workspace.GlobalWind = Vector3.new(9, 0, 4)

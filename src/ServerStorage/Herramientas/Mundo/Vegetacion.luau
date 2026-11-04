@@ -527,7 +527,9 @@ local function hongos(base, carpeta)
 	for _ = 1, rng:NextInteger(2, 5) do
 		local alto = n(0.8, 2.4)
 		local posicion = base + Vector3.new(n(-1.5, 1.5), 0, n(-1.5, 1.5))
-		cilindro(posicion - Vector3.new(0, 0.3, 0), posicion + Vector3.new(0, alto, 0), alto * 0.22, Color3.fromRGB(200, 192, 176), modelo)
+		-- cada hongo, en el suelo real bajo él (en cuesta no quedan en el aire)
+		posicion = Vector3.new(posicion.X, sueloReal(posicion.X, posicion.Z) or base.Y, posicion.Z)
+		cilindro(posicion - Vector3.new(0, 0.5, 0), posicion + Vector3.new(0, alto, 0), alto * 0.22, Color3.fromRGB(200, 192, 176), modelo)
 		local ancho = alto * n(1, 1.5)
 		local sombrero = elipsoide(
 			Vector3.new(ancho, ancho * 0.4, ancho),
@@ -588,8 +590,10 @@ local function sembrar(cantidad, intentosMaximos, condicion, crear)
 			local pendiente = Terreno.pendienteEn(x, z)
 			local y = if condicion(d, pendiente, x, z) then sueloReal(x, z) else nil
 			if y and y > NIVEL_AGUA + 1 then
-				crear(Vector3.new(x, y, z), d)
-				hechos += 1
+				-- crear() devuelve false si al final no pudo poner nada ahí
+				if crear(Vector3.new(x, y, z), d) ~= false then
+					hechos += 1
+				end
 			end
 		end
 		if intentos % 150 == 0 then
@@ -713,23 +717,86 @@ local function colocarModelo(nombre, base, carpeta, escalaExtra)
 	local pivote = copia:GetPivot()
 	copia:PivotTo(CFrame.new(pivote.Position) * CFrame.Angles(0, n(0, math.pi * 2), 0) * pivote.Rotation)
 
-	-- Apoyarlo en el punto más bajo del suelo real bajo su base, y hundirlo un poco:
-	-- los árboles traen un montículo de raíces en la base que debe quedar enterrado
+	-- Cuánto enterrar la base (raíces, montículo) además de tocar el suelo
 	local caja, tamanoFinal = copia:GetBoundingBox()
-	local fondo = caja.Position.Y - tamanoFinal.Y / 2
-	local radioBase = math.clamp(tamanoFinal.Y * 0.04, 0.6, 3)
-	local suelo = sueloMinimo(base.X, base.Z, radioBase) or base.Y
 	local hundir
 	if not datos.balanceo then
-		hundir = tamanoFinal.Y * 0.25 -- rocas y cactus: bien asentados
+		hundir = tamanoFinal.Y * 0.2 -- rocas y cactus: bien asentados
 	elseif tamanoFinal.Y > 12 then
 		-- árboles: las raíces bajo tierra (y si traía disco de tierra, hasta donde llegaba)
-		hundir = math.max(tamanoFinal.Y * 0.04 + 0.6, tamanoFinal.Y * (plantilla:GetAttribute("Enterrar") or 0) + 0.4)
+		hundir = math.max(tamanoFinal.Y * 0.025 + 0.4, tamanoFinal.Y * (plantilla:GetAttribute("Enterrar") or 0) + 0.3)
 	else
-		hundir = tamanoFinal.Y * 0.1 + 0.2 -- plantas pequeñas
+		hundir = tamanoFinal.Y * 0.08 + 0.15 -- plantas pequeñas
 	end
-	copia:PivotTo(copia:GetPivot() + Vector3.new(base.X - caja.Position.X, suelo - hundir - fondo, base.Z - caja.Position.Z))
-	base = Vector3.new(base.X, suelo, base.Z)
+
+	-- Centrar el modelo en el punto elegido (a la altura del suelo)
+	local fondo = caja.Position.Y - tamanoFinal.Y / 2
+	copia:PivotTo(copia:GetPivot() + Vector3.new(base.X - caja.Position.X, base.Y - fondo, base.Z - caja.Position.Z))
+
+	-- Medir la planta REAL de la base: lanzamos rayos de abajo hacia arriba contra el
+	-- propio modelo (tronco y raíces). En cada punto donde el modelo toca, miramos el
+	-- suelo justo debajo. Lo bajamos lo justo para que NINGÚN punto quede en el aire.
+	local bajar, minimoHueco, contactos = nil, math.huge, 0
+	local centroX, centroZ = 0, 0
+	local caja2, tamano2 = copia:GetBoundingBox()
+	local fondo2 = caja2.Position.Y - tamano2.Y / 2
+	-- Solo cuenta lo que está pegado al fondo (raíces y pie del tronco), no las ramas bajas
+	local alcance = tamano2.Y * 0.06 + 0.6
+	-- El pie del tronco está cerca del centro: rejilla fina (cada ~0,4 studs) para no
+	-- "saltarse" un tronco delgado entre dos rayos
+	local radio = math.min(math.max(tamano2.X, tamano2.Z) / 2, math.clamp(tamano2.Y * 0.14, 1.2, 9))
+	local paso = math.max(radio / 10, 0.2)
+	copia.Parent = Workspace
+	local piezasConsulta = {}
+	for _, p in copia:GetDescendants() do
+		if p:IsA("BasePart") and p.Transparency < 1 then
+			piezasConsulta[p] = p.CanQuery
+			p.CanQuery = true
+		end
+	end
+	local parametrosModelo = RaycastParams.new()
+	parametrosModelo.FilterType = Enum.RaycastFilterType.Include
+	parametrosModelo.FilterDescendantsInstances = { copia }
+	for dx = -radio, radio, paso do
+		for dz = -radio, radio, paso do
+			local x, z = caja2.Position.X + dx, caja2.Position.Z + dz
+			local golpe = Workspace:Raycast(Vector3.new(x, fondo2 - 1, z), Vector3.new(0, alcance + 1, 0), parametrosModelo)
+			if golpe then
+				local suelo = sueloReal(x, z)
+				if suelo then
+					local hueco = golpe.Position.Y - suelo -- > 0 significa que ahí flotaría
+					bajar = math.max(bajar or -math.huge, hueco)
+					minimoHueco = math.min(minimoHueco, hueco)
+					contactos += 1
+					centroX += x
+					centroZ += z
+				end
+			end
+		end
+	end
+	for p, valor in piezasConsulta do
+		p.CanQuery = valor
+	end
+	copia.Parent = nil
+
+	if contactos > 0 then
+		-- En cuestas muy fuertes la mitad del tronco quedaría enterrada: mejor no ponerlo ahí
+		-- (las rocas sí pueden quedar medio enterradas en una ladera: es natural)
+		if datos.balanceo and bajar - minimoHueco > math.max(tamano2.Y * 0.12, 1.5) then
+			copia:Destroy()
+			return "cuesta"
+		end
+		copia:PivotTo(copia:GetPivot() - Vector3.new(0, bajar + hundir, 0))
+		-- El centro real del tronco (para el colisionador)
+		local tx, tz = centroX / contactos, centroZ / contactos
+		base = Vector3.new(tx, sueloReal(tx, tz) or base.Y, tz)
+	else
+		-- No encontramos la base con rayos: plan antiguo (el suelo más bajo alrededor)
+		local radioBase = math.clamp(tamano2.Y * 0.08, 0.6, 5)
+		local suelo = sueloMinimo(base.X, base.Z, radioBase) or base.Y
+		copia:PivotTo(copia:GetPivot() - Vector3.new(0, base.Y - suelo + hundir, 0))
+		base = Vector3.new(base.X, suelo, base.Z)
+	end
 
 	-- Colisionador invisible en el tronco para no atravesar los árboles
 	if datos.balanceo and tamanoFinal.Y > 12 then
@@ -769,10 +836,16 @@ local function colocarModelo(nombre, base, carpeta, escalaExtra)
 end
 
 -- Pone un modelo realista; si no se pudo cargar, usa el de piezas como plan B
+-- Devuelve false si el sitio no valía (cuesta demasiado fuerte): así se busca otro
 local function plantar(nombre, base, carpeta, planB, escalaExtra)
-	if not colocarModelo(nombre, base, carpeta, escalaExtra) and planB then
+	local resultado = colocarModelo(nombre, base, carpeta, escalaExtra)
+	if resultado == "cuesta" then
+		return false
+	end
+	if not resultado and planB then
 		planB(base, carpeta)
 	end
+	return true
 end
 
 function Vegetacion.Generar(mundo)
@@ -831,37 +904,37 @@ function Vegetacion.Generar(mundo)
 	cuenta.hayas = sembrar(130, 9000, function(d, p)
 		return esBosque(d) and p < 0.5 and d.manchas < 0.25
 	end, function(pos)
-		plantar(if rng:NextNumber() < 0.22 then "HayaGrande" else "Haya", pos, cBosque, robleB)
+		return plantar(if rng:NextNumber() < 0.22 then "HayaGrande" else "Haya", pos, cBosque, robleB)
 	end)
 	cuenta.hojaAncha = sembrar(70, 6000, function(d, p)
 		return esBosque(d) and p < 0.5
 	end, function(pos)
-		plantar("HojaAncha", pos, cBosque, robleB)
+		return plantar("HojaAncha", pos, cBosque, robleB)
 	end)
 	sembrar(50, 5000, function(d, p)
 		return esBosque(d) and p < 0.5
 	end, function(pos)
-		plantar("Cornejo", pos, cBosque, abedulB)
+		return plantar("Cornejo", pos, cBosque, abedulB)
 	end)
 	sembrar(70, 5000, function(d, p)
 		return esBosque(d) and p < 0.55
 	end, function(pos)
-		plantar("HayaJoven", pos, cBosque, arbustoVerdeB)
+		return plantar("HayaJoven", pos, cBosque, arbustoVerdeB)
 	end)
 	sembrar(170, 6000, function(d, p)
 		return esBosque(d) and p < 0.6
 	end, function(pos)
-		plantar("Arbusto", pos, cBosque, arbustoVerdeB)
+		return plantar("Arbusto", pos, cBosque, arbustoVerdeB)
 	end)
 	sembrar(220, 6000, function(d, p)
 		return esBosque(d) and p < 0.5 and d.manchas < 0.15
 	end, function(pos)
-		plantar("Helecho", pos, cBosque, nil)
+		return plantar("Helecho", pos, cBosque, nil)
 	end)
 	sembrar(70, 4000, function(d, p)
 		return esBosque(d) and (p > 0.4 or rng:NextNumber() < 0.2)
 	end, function(pos)
-		plantar("Roca", pos, cBosque, rocaB)
+		return plantar("Roca", pos, cBosque, rocaB)
 	end)
 
 	-- ===== Bosque oscuro: secuoyas enormes y árboles de pantano =====
@@ -869,12 +942,12 @@ function Vegetacion.Generar(mundo)
 	cuenta.secuoyas = sembrar(170, 9000, function(d, p)
 		return esOscuro(d) and p < 0.7 and d.pantano < 0.2
 	end, function(pos)
-		plantar("Secuoya", pos, cOscuro, abetoOscuroB)
+		return plantar("Secuoya", pos, cOscuro, abetoOscuroB)
 	end)
 	cuenta.pantano = sembrar(95, 6000, function(d, p)
 		return esOscuro(d) and p < 0.7
 	end, function(pos)
-		plantar("Pantano", pos, cOscuro, function(posicion, c)
+		return plantar("Pantano", pos, cOscuro, function(posicion, c)
 			arbolMuerto(posicion, c, Color3.fromRGB(58, 54, 50))
 		end)
 	end)
@@ -886,17 +959,17 @@ function Vegetacion.Generar(mundo)
 	sembrar(170, 5000, function(d, p)
 		return esOscuro(d) and p < 0.6
 	end, function(pos)
-		plantar("Helecho", pos, cOscuro, nil, 1.3)
+		return plantar("Helecho", pos, cOscuro, nil, 1.3)
 	end)
 	sembrar(60, 3000, function(d, p)
 		return esOscuro(d) and p < 0.6
 	end, function(pos)
-		plantar("Arbusto", pos, cOscuro, arbustoOscuroB)
+		return plantar("Arbusto", pos, cOscuro, arbustoOscuroB)
 	end)
 	sembrar(70, 4000, function(d, p)
 		return esOscuro(d) and (p > 0.4 or rng:NextNumber() < 0.25)
 	end, function(pos)
-		plantar("Roca", pos, cOscuro, function(posicion, c)
+		return plantar("Roca", pos, cOscuro, function(posicion, c)
 			roca(posicion, c, M.Basalt, Color3.fromRGB(58, 56, 56))
 		end)
 	end)
@@ -906,22 +979,22 @@ function Vegetacion.Generar(mundo)
 	cuenta.cactus = sembrar(120, 6000, function(d, p)
 		return esDesierto(d) and p < 0.45 and d.meseta < 0.3
 	end, function(pos)
-		plantar("Cactus", pos, cDesierto, cactus)
+		return plantar("Cactus", pos, cDesierto, cactus)
 	end)
 	sembrar(110, 5000, function(d, p)
 		return esDesierto(d) and p < 0.5
 	end, function(pos)
-		plantar("Agave", pos, cDesierto, matorralSeco)
+		return plantar("Agave", pos, cDesierto, matorralSeco)
 	end)
 	sembrar(60, 4000, function(d, p)
 		return esDesierto(d) and p < 0.4
 	end, function(pos)
-		plantar("Rodadora", pos, cDesierto, matorralSeco)
+		return plantar("Rodadora", pos, cDesierto, matorralSeco)
 	end)
 	sembrar(110, 5000, function(d, p)
 		return esDesierto(d) and (p > 0.35 or rng:NextNumber() < 0.3)
 	end, function(pos)
-		plantar("Roca", pos, cDesierto, function(posicion, c)
+		return plantar("Roca", pos, cDesierto, function(posicion, c)
 			roca(posicion, c, M.Sandstone, Color3.fromRGB(168, 100, 64), 1.3)
 		end, 1.2)
 	end)
@@ -941,12 +1014,12 @@ function Vegetacion.Generar(mundo)
 	sembrar(60, 4000, function(d, p)
 		return d.montana > 0.5 and d.altura < 150 and p < 0.7
 	end, function(pos)
-		plantar("Secuoya", pos, cMontana, abetoB, 0.6)
+		return plantar("Secuoya", pos, cMontana, abetoB, 0.6)
 	end)
 	sembrar(70, 4000, function(d, p)
 		return d.montana > 0.5 and p > 0.3
 	end, function(pos)
-		plantar("Roca", pos, cMontana, function(posicion, c)
+		return plantar("Roca", pos, cMontana, function(posicion, c)
 			roca(posicion, c, M.Slate, Color3.fromRGB(96, 94, 90), 1.4)
 		end, 1.4)
 	end)

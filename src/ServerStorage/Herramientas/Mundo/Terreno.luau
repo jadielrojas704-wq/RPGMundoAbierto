@@ -311,12 +311,12 @@ function Terreno.Generar()
 	local colores = {
 		[M.Grass] = Color3.fromRGB(98, 122, 58), -- bosque normal
 		[M.LeafyGrass] = Color3.fromRGB(50, 62, 40), -- bosque oscuro
-		[M.Ground] = Color3.fromRGB(118, 98, 72),
+		[M.Ground] = Color3.fromRGB(150, 124, 94), -- con la textura "Clumpy Dirt" (tierra)
 		[M.Sand] = Color3.fromRGB(206, 180, 130),
-		[M.Sandstone] = Color3.fromRGB(176, 102, 62),
-		[M.Mud] = Color3.fromRGB(60, 50, 40),
-		[M.Rock] = Color3.fromRGB(114, 108, 100),
-		[M.Slate] = Color3.fromRGB(96, 94, 90),
+		[M.Sandstone] = Color3.fromRGB(214, 128, 82), -- mesetas rojas del desierto
+		[M.Mud] = Color3.fromRGB(84, 68, 52),
+		[M.Rock] = Color3.fromRGB(176, 168, 158), -- la textura de roca es oscura: color claro
+		[M.Slate] = Color3.fromRGB(128, 124, 118),
 		[M.Basalt] = Color3.fromRGB(50, 48, 48),
 	}
 	for material, color in colores do

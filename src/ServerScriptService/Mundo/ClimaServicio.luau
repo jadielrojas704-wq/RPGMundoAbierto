@@ -85,21 +85,63 @@ local function alturaSol(hora)
 	return math.sin((hora - 6) / 12 * math.pi)
 end
 
-local COLOR_DIA = Color3.fromRGB(140, 125, 105)
-local COLOR_NOCHE = Color3.fromRGB(46, 54, 78)
-local TONO_DIA = Color3.fromRGB(255, 240, 220)
-local TONO_ATARDECER = Color3.fromRGB(255, 160, 90)
+-- Paleta del cielo según la hora. El juego es realista pero con un toque de fantasía:
+-- atardeceres rosados y dorados, y noches de luna color lavanda/morado.
+local PALETA = {
+	-- luz ambiente de exteriores (lo que ilumina las sombras)
+	ambienteDia = Color3.fromRGB(140, 128, 110),
+	ambienteAtardecer = Color3.fromRGB(165, 118, 132),
+	ambienteNoche = Color3.fromRGB(120, 88, 190),
+	-- luz ambiente de interiores
+	interiorDia = Color3.fromRGB(70, 62, 55),
+	interiorNoche = Color3.fromRGB(52, 38, 92),
+	-- color de la luz del sol / de la luna
+	solDia = Color3.fromRGB(255, 242, 222),
+	solAtardecer = Color3.fromRGB(255, 150, 105),
+	luna = Color3.fromRGB(176, 150, 255),
+	-- nubes
+	nubesDia = Color3.fromRGB(255, 249, 242),
+	nubesAtardecer = Color3.fromRGB(255, 168, 150),
+	nubesNoche = Color3.fromRGB(118, 92, 172),
+	nubesTormenta = Color3.fromRGB(78, 80, 92),
+}
+
+local momentoDelDia = Config.Momento
 
 local function actualizarLuz(oscuridad)
-	local sol = alturaSol(Lighting.ClockTime)
-	local dia = math.clamp(sol * 3, 0, 1) -- 0 de noche, 1 de día
-	local atardecer = math.clamp(1 - math.abs(sol) * 4, 0, 1) -- cerca del horizonte
+	local dia, atardecer, noche = momentoDelDia(Lighting.ClockTime)
 
-	Lighting.Brightness = mezcla(0.35, 2.6, dia) * (1 - oscuridad * 0.5)
-	Lighting.OutdoorAmbient = COLOR_NOCHE:Lerp(COLOR_DIA, dia):Lerp(Color3.fromRGB(90, 92, 98), oscuridad * 0.5)
-	Lighting.ColorShift_Top = TONO_DIA:Lerp(TONO_ATARDECER, atardecer)
-	Lighting.ExposureCompensation = mezcla(-0.25, 0.1, dia) - oscuridad * 0.15
-	Lighting.EnvironmentDiffuseScale = mezcla(0.4, 1, dia)
+	-- De noche la luna ilumina bastante (noche mágica, no negra), con luz lavanda
+	-- (la luna no debe ser muy fuerte: si no, el cielo nocturno se vuelve azul eléctrico)
+	Lighting.Brightness = mezcla(0.8, 2.6, dia) * (1 - oscuridad * 0.5)
+	local ambiente = PALETA.ambienteNoche:Lerp(PALETA.ambienteDia, dia):Lerp(PALETA.ambienteAtardecer, atardecer * 0.6)
+	Lighting.OutdoorAmbient = ambiente:Lerp(Color3.fromRGB(90, 92, 98), oscuridad * 0.5)
+	Lighting.Ambient = PALETA.interiorNoche:Lerp(PALETA.interiorDia, dia)
+	local luz = PALETA.solDia:Lerp(PALETA.solAtardecer, atardecer)
+	Lighting.ColorShift_Top = luz:Lerp(PALETA.luna, noche)
+	Lighting.ExposureCompensation = mezcla(0.25, 0.1, dia) - oscuridad * 0.15
+	Lighting.EnvironmentDiffuseScale = mezcla(0.5, 1, dia)
+	Lighting.EnvironmentSpecularScale = mezcla(0.6, 1, dia)
+end
+
+-- Color de las nubes según la hora y el clima
+local function colorNubes(gris)
+	local _, atardecer, noche = momentoDelDia(Lighting.ClockTime)
+	local color = PALETA.nubesDia:Lerp(PALETA.nubesAtardecer, atardecer):Lerp(PALETA.nubesNoche, noche)
+	return color:Lerp(PALETA.nubesTormenta, gris)
+end
+
+-- Cielo: muchas estrellas, luna grande y un sol cálido
+local function prepararCielo()
+	local cielo = Lighting:FindFirstChildOfClass("Sky")
+	if not cielo then
+		cielo = Instance.new("Sky")
+		cielo.Parent = Lighting
+	end
+	cielo.CelestialBodiesShown = true
+	cielo.StarCount = 5000 -- el máximo
+	cielo.MoonAngularSize = 22
+	cielo.SunAngularSize = 16
 end
 
 function ClimaServicio.Iniciar()
@@ -108,6 +150,7 @@ function ClimaServicio.Iniciar()
 	Workspace:SetAttribute("ClimaAnterior", climaActual)
 	Workspace:SetAttribute("ClimaCambio", Workspace:GetServerTimeNow())
 	nuevoViento(true)
+	prepararCielo()
 
 	local nubes = Workspace.Terrain:FindFirstChildOfClass("Clouds")
 	local finClima = os.clock() + rng:NextNumber(Config.DURACION_CLIMA[1], Config.DURACION_CLIMA[2])
@@ -117,6 +160,15 @@ function ClimaServicio.Iniciar()
 	-- Para probar: en Play, en la barra de comandos (vista Server) escribe por ejemplo
 	--     workspace:SetAttribute("ForzarClima", "Tormenta")
 	-- Solo funciona desde el servidor: un jugador no puede cambiar el clima.
+	-- También se puede cambiar la hora para probar la noche:
+	--     workspace:SetAttribute("ForzarHora", 22)
+	Workspace:GetAttributeChangedSignal("ForzarHora"):Connect(function()
+		local hora = Workspace:GetAttribute("ForzarHora")
+		if typeof(hora) == "number" then
+			Lighting.ClockTime = hora % 24
+		end
+	end)
+
 	local climaForzado = nil
 	Workspace:GetAttributeChangedSignal("ForzarClima"):Connect(function()
 		local nombre = Workspace:GetAttribute("ForzarClima")
@@ -167,8 +219,7 @@ function ClimaServicio.Iniciar()
 			if nubes then
 				nubes.Cover = mezcla(antes.nubes.Cover, despues.nubes.Cover, t)
 				nubes.Density = mezcla(antes.nubes.Density, despues.nubes.Density, t)
-				local gris = mezcla(0, 0.6, oscuridad)
-				nubes.Color = Color3.fromRGB(255, 245, 230):Lerp(Color3.fromRGB(80, 84, 92), gris)
+				nubes.Color = colorNubes(mezcla(0, 0.6, oscuridad))
 			end
 		end
 	end)
