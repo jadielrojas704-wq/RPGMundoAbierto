@@ -50,7 +50,9 @@ PueblosConfig.PUEBLOS = {
 		tipo = "Capital",
 		cultura = "Reino",
 		pista = Vector2.new(-150, 170),
-		radio = 100,
+		radio = 160,
+		-- ciudadela de 9 lados: calle mayor, mercado, barrio noble y castillo con segunda muralla
+		forma = { tipo = "Ciudadela", radio = 160 },
 		tiendas = { "Herrero", "Armaduras", "Armas", "Pociones", "Establo" },
 	},
 	{
@@ -84,7 +86,9 @@ PueblosConfig.PUEBLOS = {
 		tipo = "Capital",
 		cultura = "Sol",
 		pista = Vector2.new(650, 40),
-		radio = 100,
+		radio = 160,
+		-- medina rectangular: gran avenida, bazar, manzanas apretadas y palacio con jardín
+		forma = { tipo = "Rect", largo = 250, ancho = 200, eje = "X" },
 		tiendas = { "Herrero", "Armaduras", "Armas", "Pociones", "Establo" },
 	},
 	{
@@ -118,7 +122,9 @@ PueblosConfig.PUEBLOS = {
 		tipo = "Capital",
 		cultura = "Brujos",
 		pista = Vector2.new(-620, -60),
-		radio = 100,
+		radio = 145,
+		-- ciudad orgánica: calle en espiral hasta la torre, cementerio y empalizada torcida
+		forma = { tipo = "Organica", radio = 145 },
 		tiendas = { "Herrero", "Armaduras", "Armas", "Pociones", "Establo" },
 	},
 	{
@@ -152,7 +158,9 @@ PueblosConfig.PUEBLOS = {
 		tipo = "Capital",
 		cultura = "Norte",
 		pista = Vector2.new(300, -700),
-		radio = 95,
+		radio = 158,
+		-- fortaleza alargada entre montañas: casas largas en filas y gran salón al fondo
+		forma = { tipo = "Rect", largo = 290, ancho = 124, eje = "X" },
 		tiendas = { "Herrero", "Armaduras", "Armas", "Pociones", "Establo" },
 	},
 	{
@@ -357,6 +365,7 @@ PueblosConfig.SALUDOS = {
 PueblosConfig.ESCENAS = {
 	Reino = {
 		Abuso = {
+			llevar = "Tú, campesino. Acompáñame. Ahora.", -- el noble se lleva al plebeyo a un callejón
 			noble = { "¡Apártate de mi camino, campesino!", "¿Me has manchado la capa? ¡Arrodíllate!", "Vuelve a tu pocilga, que es donde perteneces." },
 			plebeyo = { "P-perdón, mi señor...", "No fue mi intención, mi señor...", "..." },
 			testigo = "Siempre igual con los nobles...",
@@ -369,6 +378,7 @@ PueblosConfig.ESCENAS = {
 	},
 	Sol = {
 		Abuso = {
+			llevar = "Tú, aguador. Sígueme, lejos de miradas.", -- el noble se lleva al plebeyo a un callejón
 			noble = { "¡Fuera de mi sombra, aguador!", "¿Te atreves a mirarme a los ojos?", "Recoge eso del suelo. Con la boca, si hace falta." },
 			plebeyo = { "Mil perdones, noble emir...", "Solo llevaba agua, señor...", "..." },
 			testigo = "Que el sol nos dé paciencia...",
@@ -381,6 +391,7 @@ PueblosConfig.ESCENAS = {
 	},
 	Brujos = {
 		Abuso = {
+			llevar = "Tú. Ven conmigo... no tengas miedo. Todavía.", -- el noble se lleva al plebeyo a un callejón
 			noble = { "¿Respiras sin mi permiso, gusano?", "Podría convertirte en vela ahora mismo.", "Arrástrate. Me divierte." },
 			plebeyo = { "N-no, maestre, perdone...", "Por favor, no me haga daño...", "..." },
 			testigo = "Mejor no mirar... Mañana podríamos ser nosotros.",
@@ -393,6 +404,7 @@ PueblosConfig.ESCENAS = {
 	},
 	Norte = {
 		Abuso = {
+			llevar = "Eh, rata. Ven aquí detrás. Ya.", -- el noble se lleva al plebeyo a un callejón
 			noble = { "¡Quita de en medio, rata de la mina!", "¿Tú? ¿Mirarme? Ja.", "Al suelo, que es donde duermen los débiles." },
 			plebeyo = { "Perdón, jarl...", "Solo pasaba, señor...", "..." },
 			testigo = "El frío endurece a todos... menos el corazón del jarl.",

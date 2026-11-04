@@ -31,4 +31,15 @@ CombateConfig.Esquiva = {
 	},
 }
 
+CombateConfig.Correr = {
+	VELOCIDAD_CAMINAR = 16, -- velocidad normal (la de Roblox por defecto)
+	VELOCIDAD_CORRER = 26, -- velocidad al correr
+	COSTO_POR_SEGUNDO = 14, -- estamina que gasta correr cada segundo (solo si te mueves)
+	MINIMO_PARA_REANUDAR = 30, -- si te quedas sin estamina, vuelves a correr al llegar a esto
+	VENTANA_DOBLE_W = 0.3, -- segundos máximos entre los dos toques de W
+	TECLAS = { Enum.KeyCode.LeftControl, Enum.KeyCode.RightControl }, -- mantener para correr
+	BOTON_MANDO = Enum.KeyCode.ButtonL3, -- en mando: pulsar el stick izquierdo
+	FOV_CORRER = 78, -- la cámara se abre un poco al correr
+}
+
 return CombateConfig

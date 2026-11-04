@@ -15,6 +15,7 @@ local Terreno = require(script.Parent.Terreno)
 local Vegetacion = require(script.Parent.Vegetacion)
 local C = require(script.Parent.Construccion)
 local NPCs = require(script.Parent.NPCs)
+local Ciudades = require(script.Parent.Ciudades)
 
 local Pueblos = {}
 
@@ -1208,6 +1209,22 @@ end
 -- ===== CONSTRUIR UN PUEBLO =====
 -- ===================================================================
 
+-- Herramientas que usan los trazados de las capitales (Ciudades)
+local KIT = {
+	C = C,
+	Casas = Casas,
+	Principales = Principales,
+	Centros = Centros,
+	tienda = tienda,
+	sueloEn = sueloEn,
+	mirandoA = mirandoA,
+	elegir = elegir,
+	SUELO_PLAZA = SUELO_PLAZA,
+	COLOR_FAROL = COLOR_FAROL,
+	Vegetacion = Vegetacion,
+	distanciaForma = Terreno.DistanciaForma,
+}
+
 local function construirPueblo(padre, pueblo, sitio)
 	local cultura = PueblosConfig.CULTURAS[pueblo.cultura]
 	local culturaId = pueblo.cultura
@@ -1227,7 +1244,7 @@ local function construirPueblo(padre, pueblo, sitio)
 	modelo:SetAttribute("Tipo", pueblo.tipo)
 	modelo:SetAttribute("Cultura", culturaId)
 	modelo:SetAttribute("Centro", centro)
-	modelo:SetAttribute("Radio", radio)
+	modelo:SetAttribute("Radio", if esCapital and sitio.poligono then radio * 0.85 else radio)
 
 	-- Puntos por los que camina la gente (los usa NPCServicio)
 	local puntos = Instance.new("Folder")
@@ -1238,167 +1255,208 @@ local function construirPueblo(padre, pueblo, sitio)
 		v.Name = tipo
 		v.Value = Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z)
 		v.Parent = puntos
+		return v
 	end
 
-	local ocupados = {} -- { posicion, radio } para que nada se pise
-	local function libre(p, r)
-		for _, o in ocupados do
-			if (Vector3.new(p.X, 0, p.Z) - Vector3.new(o[1].X, 0, o[1].Z)).Magnitude < r + o[2] then
+	local npcs = {}
+	local casas = {}
+	if esCapital and sitio.poligono then
+		-- Capital: cada cultura tiene su propio trazado (ver Mundo/Ciudades)
+		local ciudad = Ciudades.Construir(KIT, {
+			modelo = modelo,
+			sitio = sitio,
+			pueblo = pueblo,
+			cultura = cultura,
+			culturaId = culturaId,
+			centro = centro,
+			punto = punto,
+		})
+		npcs = ciudad.npcs
+		casas = ciudad.casas
+	else
+		local ocupados = {} -- { posicion, radio } para que nada se pise
+		local function libre(p, r)
+			for _, o in ocupados do
+				if (Vector3.new(p.X, 0, p.Z) - Vector3.new(o[1].X, 0, o[1].Z)).Magnitude < r + o[2] then
+					return false
+				end
+			end
+			-- la calle principal (de la plaza a la puerta) queda libre
+			local relativo = p - centro
+			local alLado = math.abs(relativo:Dot(lateral))
+			local adelante = relativo:Dot(haciaEntrada)
+			if adelante > 0 and alLado < r + 6 then
 				return false
 			end
+			return true
 		end
-		-- la calle principal (de la plaza a la puerta) queda libre
-		local relativo = p - centro
-		local alLado = math.abs(relativo:Dot(lateral))
-		local adelante = relativo:Dot(haciaEntrada)
-		if adelante > 0 and alLado < r + 6 then
-			return false
+		local function ocupar(p, r)
+			table.insert(ocupados, { p, r })
 		end
-		return true
-	end
-	local function ocupar(p, r)
-		table.insert(ocupados, { p, r })
-	end
 
-	-- 1) Plaza central
-	local plaza = centro + haciaEntrada * radio * (if esCapital then 0.12 else 0)
-	local radioPlaza = if esCapital then 22 else 15
-	local suelo = SUELO_PLAZA[culturaId]
-	C.disco(modelo, plaza, radioPlaza * 2, suelo[1], suelo[2])
-	Centros[culturaId](modelo, plaza, esCapital, cultura)
-	ocupar(plaza, radioPlaza)
-	for k = 1, 8 do
-		local angulo = k / 8 * math.pi * 2
-		punto("Plaza", plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (radioPlaza * 0.75))
-	end
-	for t = radioPlaza + 8, radio * 0.85, 14 do
-		punto("Calle", plaza + haciaEntrada * t)
-	end
+		-- 1) Plaza central
+		local plaza = centro + haciaEntrada * radio * (if esCapital then 0.12 else 0)
+		local radioPlaza = if esCapital then 22 else 15
+		local suelo = SUELO_PLAZA[culturaId]
+		C.disco(modelo, plaza, radioPlaza * 2, suelo[1], suelo[2])
+		Centros[culturaId](modelo, plaza, esCapital, cultura)
+		ocupar(plaza, radioPlaza)
+		for k = 1, 8 do
+			local angulo = k / 8 * math.pi * 2
+			punto("Plaza", plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (radioPlaza * 0.75))
+		end
+		for t = radioPlaza + 8, radio * 0.85, 14 do
+			punto("Calle", plaza + haciaEntrada * t)
+		end
 
-	-- 2) Edificio principal (capitales) o rasgo propio (aldeas), detrás de la plaza
-	if esCapital then
-		local p = centro - haciaEntrada * radio * 0.55
-		local cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza)
-		local _, r = Principales[culturaId](modelo, cf, cultura)
-		ocupar(p, r)
-		punto("Plaza", (cf * CFrame.new(0, 0, -r - 4)).Position)
-	elseif pueblo.rasgo and Rasgos[pueblo.rasgo] then
-		local p = plaza - haciaEntrada * (radioPlaza + 26)
-		local cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza)
-		local r = Rasgos[pueblo.rasgo](modelo, cf)
-		ocupar(p, r)
-		punto("Rasgo", (cf * CFrame.new(0, 0, -r * 0.6)).Position)
-	end
+		-- 2) Edificio principal (capitales) o rasgo propio (aldeas), detrás de la plaza
+		if esCapital then
+			local p = centro - haciaEntrada * radio * 0.55
+			local cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza)
+			local _, r = Principales[culturaId](modelo, cf, cultura)
+			ocupar(p, r)
+			punto("Plaza", (cf * CFrame.new(0, 0, -r - 4)).Position)
+		elseif pueblo.rasgo and Rasgos[pueblo.rasgo] then
+			local p = plaza - haciaEntrada * (radioPlaza + 26)
+			local cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza)
+			local r = Rasgos[pueblo.rasgo](modelo, cf)
+			ocupar(p, r)
+			punto("Rasgo", (cf * CFrame.new(0, 0, -r * 0.6)).Position)
+		end
 
-	-- 3) Tiendas alrededor de la plaza, mirando a la fuente
-	local npcs = {}
-	local tiendas = pueblo.tiendas
-	local distanciaTienda = radioPlaza + 15
-	for i, tipo in tiendas do
-		local total = #tiendas
-		local abanico = if esCapital then math.rad(250) else math.rad(150)
-		local base = math.atan2(-entrada.Y, -entrada.X) -- hacia el fondo
-		local angulo = base + (if total == 1 then 0.6 else (i - 1) / (total - 1) - 0.5) * abanico
-		local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * distanciaTienda
-		local cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza)
-		local tendero, r = tienda(modelo, cf, tipo, culturaId, cultura)
-		ocupar(p, r - 4)
-		table.insert(npcs, { oficio = tipo, cf = tendero, tienda = tipo, rol = "Tendero", clase = "Plebeyo" })
-		punto("Tienda", (tendero * CFrame.new(0, 0, -6.5)).Position)
-	end
+		-- 3) Tiendas alrededor de la plaza, mirando a la fuente
+		local tiendas = pueblo.tiendas
+		local distanciaTienda = radioPlaza + 15
+		for i, tipo in tiendas do
+			local total = #tiendas
+			local abanico = if esCapital then math.rad(250) else math.rad(150)
+			local base = math.atan2(-entrada.Y, -entrada.X) -- hacia el fondo
+			local angulo = base + (if total == 1 then 0.6 else (i - 1) / (total - 1) - 0.5) * abanico
+			local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * distanciaTienda
+			local cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza)
+			local tendero, r = tienda(modelo, cf, tipo, culturaId, cultura)
+			ocupar(p, r - 4)
+			table.insert(npcs, { oficio = tipo, cf = tendero, tienda = tipo, rol = "Tendero", clase = "Plebeyo" })
+			punto("Tienda", (tendero * CFrame.new(0, 0, -6.5)).Position)
+		end
 
-	-- 4) Casas en anillos alrededor (la gente vive en ellas)
-	local casas = {}
-	local cuantas = if esCapital then 26 else rng:NextInteger(12, 15)
-	local intentos = 0
-	while #casas < cuantas and intentos < cuantas * 40 do
-		intentos += 1
-		local angulo = n(0, math.pi * 2)
-		local distancia = n(radioPlaza + 18, radio * (if esCapital then 0.82 else 0.86))
-		local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * distancia
-		if (p - centro).Magnitude < radio * 0.88 then
-			local estimado = if culturaId == "Norte" then 15 else 10.5
-			if libre(p, estimado) then
-				local yy = sueloEn(p.X, p.Z, y)
-				-- las casas miran hacia la plaza, con un poco de desorden
-				local cf = mirandoA(Vector3.new(p.X, yy, p.Z), plaza) * CFrame.Angles(0, math.rad(n(-14, 14)), 0)
-				local casa, r, _, puerta = Casas[culturaId](modelo, cf)
-				casa.Name = "Casa" .. (#casas + 1)
-				ocupar(p, r)
-				table.insert(casas, puerta.Position)
-				punto("Puerta", puerta.Position)
-				-- detalles junto a la casa
-				local junto = (cf * CFrame.new(n(-5, 5), 0, -r - 1.5)).Position
-				if rng:NextNumber() < 0.5 then
-					C.barril(modelo, Vector3.new(junto.X, sueloEn(junto.X, junto.Z, yy), junto.Z))
-				elseif rng:NextNumber() < 0.5 then
-					C.caja(modelo, Vector3.new(junto.X, sueloEn(junto.X, junto.Z, yy), junto.Z))
+		-- 4) Casas en anillos alrededor (la gente vive en ellas)
+		local cuantas = if esCapital then 26 else rng:NextInteger(12, 15)
+		local intentos = 0
+		while #casas < cuantas and intentos < cuantas * 40 do
+			intentos += 1
+			local angulo = n(0, math.pi * 2)
+			local distancia = n(radioPlaza + 18, radio * (if esCapital then 0.82 else 0.86))
+			local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * distancia
+			if (p - centro).Magnitude < radio * 0.88 then
+				local estimado = if culturaId == "Norte" then 15 else 10.5
+				if libre(p, estimado) then
+					local yy = sueloEn(p.X, p.Z, y)
+					-- las casas miran hacia la plaza, con un poco de desorden
+					local cf = mirandoA(Vector3.new(p.X, yy, p.Z), plaza) * CFrame.Angles(0, math.rad(n(-14, 14)), 0)
+					local casa, r, _, puerta = Casas[culturaId](modelo, cf)
+					casa.Name = "Casa" .. (#casas + 1)
+					ocupar(p, r)
+					table.insert(casas, puerta.Position)
+					punto("Puerta", puerta.Position)
+					-- detalles junto a la casa
+					local junto = (cf * CFrame.new(n(-5, 5), 0, -r - 1.5)).Position
+					if rng:NextNumber() < 0.5 then
+						C.barril(modelo, Vector3.new(junto.X, sueloEn(junto.X, junto.Z, yy), junto.Z))
+					elseif rng:NextNumber() < 0.5 then
+						C.caja(modelo, Vector3.new(junto.X, sueloEn(junto.X, junto.Z, yy), junto.Z))
+					end
 				end
 			end
 		end
-	end
 
-	-- 5) Faroles: alrededor de la plaza y por la calle de la entrada
-	local colorFarol = COLOR_FAROL[culturaId]
-	local cuantosFaroles = if esCapital then 8 else 5
-	for k = 1, cuantosFaroles do
-		local angulo = k / cuantosFaroles * math.pi * 2 + 0.2
-		local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (radioPlaza + 1.5)
-		C.farol(modelo, Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), colorFarol)
-	end
-	for t = radioPlaza + 10, radio * 0.9, 18 do
-		for _, s in { -1, 1 } do
-			local p = plaza + haciaEntrada * t + lateral * s * 5.5
+		-- 5) Faroles: alrededor de la plaza y por la calle de la entrada
+		local colorFarol = COLOR_FAROL[culturaId]
+		local cuantosFaroles = if esCapital then 8 else 5
+		for k = 1, cuantosFaroles do
+			local angulo = k / cuantosFaroles * math.pi * 2 + 0.2
+			local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (radioPlaza + 1.5)
 			C.farol(modelo, Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), colorFarol)
 		end
-	end
-
-	-- 6) Murallas (capitales) o vallas (aldeas)
-	local puertaP = nil
-	if esCapital then
-		local puerta, sueloPuerta = muralla(modelo, centro, radio * 0.95, entrada, culturaId, cultura)
-		puertaP = Vector3.new(puerta.X, sueloPuerta, puerta.Z)
-	else
-		valla(modelo, centro, radio * 0.93, entrada, culturaId)
-	end
-
-	-- 7) Un poco de vegetación del lugar dentro del pueblo
-	local plantas = { Reino = "HayaJoven", Sol = nil, Brujos = "Helecho", Norte = nil }
-	if plantas[culturaId] then
-		for _ = 1, (if esCapital then 6 else 5) do
-			local angulo = n(0, math.pi * 2)
-			local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * n(radioPlaza + 4, radio * 0.8)
-			if libre(p, 3) then
-				Vegetacion.Plantar(plantas[culturaId], p, modelo)
-				ocupar(p, 3)
+		for t = radioPlaza + 10, radio * 0.9, 18 do
+			for _, s in { -1, 1 } do
+				local p = plaza + haciaEntrada * t + lateral * s * 5.5
+				C.farol(modelo, Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), colorFarol)
 			end
 		end
-	elseif culturaId == "Sol" then
-		for _ = 1, (if esCapital then 8 else 6) do
-			local angulo = n(0, math.pi * 2)
-			local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * n(radioPlaza + 4, radio * 0.8)
-			if libre(p, 3) then
-				Vegetacion.Palmera(Vector3.new(p.X, sueloEn(p.X, p.Z, y) - 0.5, p.Z), modelo)
-				ocupar(p, 3)
+
+		-- 6) Murallas (capitales) o vallas (aldeas)
+		if esCapital then
+			local puerta, sueloPuerta = muralla(modelo, centro, radio * 0.95, entrada, culturaId, cultura)
+			local puertaP = Vector3.new(puerta.X, sueloPuerta, puerta.Z)
+			for _, s in { -1, 1 } do
+				local p = puertaP + lateral * s * 4 + haciaEntrada * 2
+				table.insert(npcs, { oficio = "Guardia", cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), p + haciaEntrada * 10), rol = "Guardia", clase = "Plebeyo" })
+			end
+		else
+			valla(modelo, centro, radio * 0.93, entrada, culturaId)
+		end
+
+		-- 7) Un poco de vegetación del lugar dentro del pueblo
+		local plantas = { Reino = "HayaJoven", Sol = nil, Brujos = "Helecho", Norte = nil }
+		if plantas[culturaId] then
+			for _ = 1, (if esCapital then 6 else 5) do
+				local angulo = n(0, math.pi * 2)
+				local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * n(radioPlaza + 4, radio * 0.8)
+				if libre(p, 3) then
+					Vegetacion.Plantar(plantas[culturaId], p, modelo)
+					ocupar(p, 3)
+				end
+			end
+		elseif culturaId == "Sol" then
+			for _ = 1, (if esCapital then 8 else 6) do
+				local angulo = n(0, math.pi * 2)
+				local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * n(radioPlaza + 4, radio * 0.8)
+				if libre(p, 3) then
+					Vegetacion.Palmera(Vector3.new(p.X, sueloEn(p.X, p.Z, y) - 0.5, p.Z), modelo)
+					ocupar(p, 3)
+				end
 			end
 		end
+
+		-- 8) Un callejón sin salida (para las escenas de los nobles)
+		Ciudades.CallejonAldea(KIT, { modelo = modelo, sitio = sitio, pueblo = pueblo, cultura = cultura, culturaId = culturaId, centro = centro, punto = punto }, ocupados, plaza, radio)
+
 	end
 
-	-- 8) Gente: tenderos (ya puestos), guardias, nobles y plebeyos que viven en las casas
-	if puertaP then
-		for _, s in { -1, 1 } do
-			local p = puertaP + lateral * s * 4 + haciaEntrada * 2
-			table.insert(npcs, { oficio = "Guardia", cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), p + haciaEntrada * 10), rol = "Guardia", clase = "Plebeyo" })
+	-- Gente: tenderos y guardias (ya puestos), nobles y plebeyos que viven en las casas.
+	-- Empiezan repartidos por calles y plazas, nunca amontonados.
+	local nobles = if esCapital then 4 else 1
+	local plebeyos = if esCapital then 15 else 7
+	local salidas = {}
+	for _, v in puntos:GetChildren() do
+		if v.Name == "Calle" or v.Name == "Plaza" or v.Name == "Puerta" then
+			table.insert(salidas, v.Value)
 		end
 	end
-	local nobles = if esCapital then 3 else 1
-	local plebeyos = if esCapital then 10 else 7
-	local casaSiguiente = 1
+	local usados = {}
 	local function sitioInicial()
-		local angulo = n(0, math.pi * 2)
-		local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * n(radioPlaza * 0.3, radioPlaza * 0.85)
-		return mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza + Vector3.new(n(-8, 8), 0, n(-8, 8)))
+		for _ = 1, 40 do
+			local base = if #salidas > 0 then salidas[rng:NextInteger(1, #salidas)] else centro
+			local p = base + Vector3.new(n(-2.5, 2.5), 0, n(-2.5, 2.5))
+			local lejos = true
+			for _, otro in usados do
+				if (otro - p).Magnitude < 7 then
+					lejos = false
+					break
+				end
+			end
+			if lejos then
+				table.insert(usados, p)
+				return mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), p + Vector3.new(n(-8, 8), 0, n(-8, 8)))
+			end
+		end
+		return CFrame.new(centro)
 	end
+	for _, datos in npcs do
+		table.insert(usados, datos.cf.Position)
+	end
+	local casaSiguiente = 1
 	for k = 1, nobles + plebeyos do
 		local clase = if k <= nobles then "Noble" else "Plebeyo"
 		local casa = casas[casaSiguiente]

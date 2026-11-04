@@ -8,7 +8,10 @@
 --   Paseante -> camina por el pueblo (plaza, tiendas, calles, casas); de noche vuelve
 --               a su casa, entra y sale por la mañana
 -- Cuando un jugador habla con un NPC, este se para y lo mira (HablarNPC).
--- De vez en cuando pasan escenas: un noble humilla a un plebeyo, dos vecinos cotillean...
+-- De vez en cuando pasan escenas: un noble se lleva a un plebeyo a un callejón sin salida
+-- y lo humilla, dos vecinos cotillean...
+-- Cada NPC "reserva" el sitio al que va: nadie elige un sitio a menos de SEPARACION
+-- studs de otro NPC, así nunca se forman corrillos ni montones.
 -- Los globos de texto se envían a los clientes con BurbujaNPC.
 -- Para ahorrar, solo se mueven los pueblos que tienen algún jugador cerca.
 
@@ -38,6 +41,7 @@ local ANIMACIONES = {
 }
 local DISTANCIA_ACTIVO = 260 -- un pueblo "despierta" si hay un jugador a esta distancia de su borde
 local DISTANCIA_HABLAR = 14
+local SEPARACION = 6 -- distancia mínima entre NPC parados (para que nunca se amontonen)
 local rng = Random.new()
 
 -- estado[npc] = { rol, ocupado, pistas = {}, pueblo, puesto, original, ... }
@@ -223,23 +227,54 @@ local function elegirTipo(datos)
 	return "Calle"
 end
 
+-- ¿Está este sitio lejos de los demás NPC del pueblo (de donde están y de adonde van)?
+local function sitioLibre(propio, p)
+	for npc, otro in estado do
+		if otro ~= propio and otro.pueblo == propio.pueblo and not otro.durmiendo then
+			local r = otro.reserva
+			if r and Vector3.new(r.X - p.X, 0, r.Z - p.Z).Magnitude < SEPARACION then
+				return false
+			end
+			local raiz = raizDe(npc)
+			if raiz and Vector3.new(raiz.Position.X - p.X, 0, raiz.Position.Z - p.Z).Magnitude < SEPARACION - 1 then
+				return false
+			end
+		end
+	end
+	return true
+end
+
 local function puntoAlAzar(datos)
 	local puntos = datos.puntos
 	if #puntos == 0 then
 		return nil
 	end
-	-- más a la plaza y a las tiendas que a las casas
-	local tipo = elegirTipo(datos)
-	local candidatos = {}
-	for _, p in puntos do
-		if p.Name == tipo then
-			table.insert(candidatos, p.Value)
+	-- más a la plaza y a las tiendas que a las casas; nunca a un sitio ya ocupado
+	for _ = 1, 14 do
+		local tipo = elegirTipo(datos)
+		local candidatos = {}
+		for _, p in puntos do
+			if p.Name == tipo then
+				table.insert(candidatos, p.Value)
+			end
+		end
+		if #candidatos == 0 then
+			for _, p in puntos do
+				if p.Name ~= "Callejon" then
+					table.insert(candidatos, p.Value)
+				end
+			end
+		end
+		if #candidatos > 0 then
+			local base = candidatos[rng:NextInteger(1, #candidatos)]
+			local angulo = rng:NextNumber(0, math.pi * 2)
+			local destino = base + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * rng:NextNumber(0, 3)
+			if sitioLibre(datos, destino) then
+				return destino
+			end
 		end
 	end
-	if #candidatos == 0 then
-		return puntos[rng:NextInteger(1, #puntos)].Value
-	end
-	return candidatos[rng:NextInteger(1, #candidatos)]
+	return nil -- todo lleno: se queda donde está
 end
 
 local function irseADormir(npc, datos)
@@ -248,6 +283,7 @@ local function irseADormir(npc, datos)
 		caminarA(npc, datos, casa)
 	end
 	datos.durmiendo = true
+	datos.reserva = nil
 	datos.padre = npc.Parent
 	npc.Parent = dormitorio
 end
@@ -259,6 +295,7 @@ local function despertar(npc, datos)
 		local humanoide = humanoideDe(npc)
 		local altura = (humanoide and humanoide.HipHeight or 2) + (raiz and raiz.Size.Y / 2 or 1)
 		npc:PivotTo(CFrame.new(casa + Vector3.new(0, altura, 0)))
+		datos.reserva = casa
 	end
 	npc.Parent = datos.padre
 	datos.durmiendo = false
@@ -275,6 +312,7 @@ local function rutinaPaseante(npc, datos)
 			elseif not datos.durmiendo then
 				datos.padre = npc.Parent
 				datos.durmiendo = true
+				datos.reserva = nil
 				npc.Parent = dormitorio
 			end
 			task.wait(5)
@@ -286,9 +324,22 @@ local function rutinaPaseante(npc, datos)
 		else
 			local destino = puntoAlAzar(datos)
 			if destino then
-				-- un poco de variación para que no se amontonen en el mismo punto
-				destino += Vector3.new(rng:NextNumber(-3, 3), 0, rng:NextNumber(-3, 3))
-				caminarA(npc, datos, destino)
+				datos.reserva = destino -- este sitio ya es suyo: nadie más irá aquí
+				if caminarA(npc, datos, destino) then
+					datos.fallos = 0
+				else
+					local raiz = raizDe(npc)
+					datos.reserva = raiz and raiz.Position or destino
+					-- si se queda atascado varias veces seguidas, reaparece en una calle
+					datos.fallos = (datos.fallos or 0) + 1
+					if datos.fallos >= 3 and raiz then
+						datos.fallos = 0
+						local humanoide = humanoideDe(npc)
+						local altura = (humanoide and humanoide.HipHeight or 2) + raiz.Size.Y / 2
+						npc:PivotTo(CFrame.new(destino + Vector3.new(0, altura, 0)))
+						datos.reserva = destino
+					end
+				end
 			end
 			-- se queda un rato y, si pasa un jugador, a veces le dice algo
 			local espera = os.clock() + rng:NextNumber(6, 16)
@@ -341,31 +392,159 @@ local function esperarCaminando(npc)
 	end
 end
 
--- Un noble humilla a un plebeyo: lo insulta, lo señala, lo empuja y se ríe
-local function escenaAbuso(puebloModelo, cultura)
-	local noble = sacar(libresDe(puebloModelo, "Paseante", "Noble"))
-	local victima = sacar(libresDe(puebloModelo, "Paseante", "Plebeyo"))
-	if not (noble and victima) then
-		return false
+local function masCercano(lista, posicion, maximo)
+	local mejor, distancia = nil, maximo or math.huge
+	for _, npc in lista do
+		local raiz = raizDe(npc)
+		if raiz then
+			local d = (raiz.Position - posicion).Magnitude
+			if d < distancia then
+				mejor, distancia = npc, d
+			end
+		end
 	end
+	return mejor
+end
+
+-- Callejones sin salida del pueblo (puntos "Callejon": el valor es el fondo, "Boca" la salida)
+local callejonesEnUso = {}
+local function elegirCallejon(puebloModelo, cerca)
+	local carpeta = puebloModelo:FindFirstChild("Puntos")
+	if not carpeta then
+		return nil
+	end
+	local mejor, distancia = nil, 170
+	for _, v in carpeta:GetChildren() do
+		if v.Name == "Callejon" and not callejonesEnUso[v] then
+			local d = (v.Value - cerca).Magnitude
+			if d < distancia then
+				mejor, distancia = v, d
+			end
+		end
+	end
+	return mejor
+end
+
+local function vivos(...)
+	for _, npc in { ... } do
+		if not (npc.Parent and raizDe(npc)) then
+			return false
+		end
+	end
+	return true
+end
+
+-- Camina en línea recta (para el último tramo dentro de un callejón, que es un pasillo recto)
+local function andarRecto(npc, datos, destino)
+	local raiz = raizDe(npc)
+	local humanoide = humanoideDe(npc)
+	if not (raiz and humanoide) then
+		return
+	end
+	anclar(npc, false)
+	pararAnim(datos, "Quieto")
+	anim(datos, "Andar", humanoide.WalkSpeed / 7)
+	datos.caminando = true
+	humanoide:MoveTo(destino)
+	local limite = os.clock() + 6
+	while os.clock() < limite and Vector3.new(raiz.Position.X - destino.X, 0, raiz.Position.Z - destino.Z).Magnitude > 1.2 do
+		task.wait(0.1)
+	end
+	humanoide:MoveTo(raiz.Position)
+	datos.caminando = false
+	pararAnim(datos, "Andar")
+	anim(datos, "Quieto", 1)
+	task.wait(0.2)
+	anclar(npc, true)
+end
+
+-- Entra en el callejón: primero busca camino hasta la boca y luego sigue recto hasta el sitio
+local function entrarCallejon(npc, datos, boca, destino)
+	local ok = caminarA(npc, datos, boca, true)
+	andarRecto(npc, datos, destino)
+	return ok
+end
+
+-- Mensajes de prueba: workspace:SetAttribute("DepurarNPC", true)
+local function depurar(...)
+	if Workspace:GetAttribute("DepurarNPC") then
+		print("[NPC]", ...)
+	end
+end
+
+-- Un noble se lleva a un plebeyo a un callejón sin salida y allí lo humilla:
+-- lo insulta, lo señala, lo empuja contra la pared y se ríe. Un testigo murmura.
+local function escenaAbuso(puebloModelo, cultura)
 	local textos = PueblosConfig.ESCENAS[cultura] and PueblosConfig.ESCENAS[cultura].Abuso
 	if not textos then
 		return false
 	end
+	local victima = sacar(libresDe(puebloModelo, "Paseante", "Plebeyo"))
+	if not victima then
+		return false
+	end
+	local rv = raizDe(victima)
+	local callejon = rv and elegirCallejon(puebloModelo, rv.Position)
+	local noble = callejon and masCercano(libresDe(puebloModelo, "Paseante", "Noble"), rv.Position)
+	if not (callejon and noble) then
+		return false
+	end
 	local dn, dv = estado[noble], estado[victima]
 	dn.ocupado, dv.ocupado = "escena", "escena"
+	callejonesEnUso[callejon] = true
+	depurar(noble:GetAttribute("Nombre"), "se lleva a", victima:GetAttribute("Nombre"), "al callejón", callejon.Value)
+	local function terminar()
+		dn.ocupado, dv.ocupado = false, false
+		callejonesEnUso[callejon] = nil
+	end
 	esperarCaminando(noble)
 	esperarCaminando(victima)
-	local rv = raizDe(victima)
-	-- el noble va hacia el plebeyo
-	local destino = rv.Position + (raizDe(noble).Position - rv.Position).Unit * 3.2
-	caminarA(noble, dn, destino, true)
-	if not (noble.Parent and victima.Parent) then
-		dn.ocupado, dv.ocupado = false, false
+
+	-- 1) el noble va a por el plebeyo y le ordena que lo siga
+	local rn = raizDe(noble)
+	caminarA(noble, dn, rv.Position + (rn.Position - rv.Position).Unit * 3.5, true)
+	if not vivos(noble, victima) then
+		terminar()
 		return false
 	end
 	mirarA(noble, rv.Position)
 	mirarA(victima, raizDe(noble).Position)
+	decir(noble, textos.llevar or "Tú. Sígueme.", 3)
+	anim(dn, "Senalar")
+	task.wait(2.8)
+	decir(victima, "¿Y-yo...?", 2)
+	task.wait(1.6)
+
+	-- 2) los dos van al fondo del callejón: el plebeyo delante y el noble
+	--    detrás, tapándole la única salida
+	local fondo = callejon.Value
+	local boca = callejon:GetAttribute("Boca") or fondo
+	local haciaBoca = Vector3.new(boca.X - fondo.X, 0, boca.Z - fondo.Z)
+	haciaBoca = if haciaBoca.Magnitude > 0.1 then haciaBoca.Unit else Vector3.xAxis
+	local sitioNoble = fondo + haciaBoca * 3.4
+	dv.reserva, dn.reserva = fondo, sitioNoble
+	local llego = false
+	task.spawn(function()
+		local ok = entrarCallejon(victima, dv, boca, fondo)
+		depurar("plebeyo llegó a la boca:", ok)
+		llego = true
+	end)
+	task.wait(2)
+	local okNoble = entrarCallejon(noble, dn, boca + haciaBoca * 1.5, sitioNoble)
+	depurar("noble llegó a la boca:", okNoble)
+	local limite = os.clock() + 25
+	while not llego and os.clock() < limite do
+		task.wait(0.2)
+	end
+	if not vivos(noble, victima) then
+		terminar()
+		return false
+	end
+	rv = raizDe(victima)
+	mirarA(victima, raizDe(noble).Position)
+	mirarA(noble, rv.Position)
+
+	-- 3) la humillación, sin testigos... casi
 	decir(noble, textos.noble[1], 3.5)
 	anim(dn, "Senalar")
 	task.wait(3.2)
@@ -373,8 +552,8 @@ local function escenaAbuso(puebloModelo, cultura)
 	task.wait(3)
 	decir(noble, textos.noble[2], 3.5)
 	task.wait(1.2)
-	-- empujón: el plebeyo retrocede tambaleándose
-	local atras = rv.CFrame * CFrame.new(0, 0, 2.6) * CFrame.Angles(math.rad(-8), 0, 0)
+	-- empujón: el plebeyo retrocede contra la pared del fondo
+	local atras = rv.CFrame * CFrame.new(0, 0, 1.2) * CFrame.Angles(math.rad(-8), 0, 0)
 	TweenService:Create(rv, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = atras }):Play()
 	task.wait(0.6)
 	TweenService:Create(rv, TweenInfo.new(0.5), { CFrame = rv.CFrame * CFrame.Angles(math.rad(8), 0, 0) }):Play()
@@ -384,14 +563,20 @@ local function escenaAbuso(puebloModelo, cultura)
 	task.wait(3)
 	decir(victima, textos.plebeyo[3], 2.5)
 	victima:SetAttribute("Humillado", os.time())
-	-- un testigo comenta en voz baja
-	local testigo = sacar(libresDe(puebloModelo, "Paseante", "Plebeyo")) or sacar(libresDe(puebloModelo, "Tendero", nil))
+	-- alguien que pasaba cerca de la boca del callejón lo ha visto
+	local testigo = masCercano(libresDe(puebloModelo, "Paseante", "Plebeyo"), boca, 45) or masCercano(libresDe(puebloModelo, "Tendero", nil), boca, 45)
 	if testigo and textos.testigo then
 		task.wait(2)
 		decir(testigo, textos.testigo, 4)
 	end
+	-- el noble se va primero; el plebeyo se queda un momento antes de salir
 	task.wait(2)
-	dn.ocupado, dv.ocupado = false, false
+	andarRecto(noble, dn, boca + haciaBoca * 2)
+	dn.ocupado = false
+	task.wait(4)
+	andarRecto(victima, dv, boca + haciaBoca * 2)
+	terminar()
+	depurar("escena del callejón terminada")
 	return true
 end
 
@@ -408,7 +593,9 @@ local function escenaChisme(puebloModelo, cultura)
 	esperarCaminando(a)
 	esperarCaminando(b)
 	local rb = raizDe(b)
-	caminarA(a, da, rb.Position + (raizDe(a).Position - rb.Position).Unit * 3, true)
+	local sitio = rb.Position + (raizDe(a).Position - rb.Position).Unit * 3
+	da.reserva = sitio
+	caminarA(a, da, sitio, true)
 	if not (a.Parent and b.Parent) then
 		da.ocupado, db.ocupado = false, false
 		return false
@@ -424,15 +611,25 @@ local function escenaChisme(puebloModelo, cultura)
 	return true
 end
 
+-- Para probar en Studio: workspace:SetAttribute("ForzarEscena", "Valdoria") lanza ya
+-- la escena del callejón en ese pueblo.
 local function bucleEscenas(puebloModelo)
 	local cultura = puebloModelo:GetAttribute("Cultura")
 	local centro = puebloModelo:GetAttribute("Centro")
-	task.wait(rng:NextNumber(20, 40))
+	local siguiente = os.clock() + rng:NextNumber(20, 40)
 	while puebloModelo.Parent do
-		if centro and not esDeNoche() and jugadorCerca(centro, (puebloModelo:GetAttribute("Radio") or 60) + 40) then
-			local ok = pcall(function()
-				if rng:NextNumber() < 0.55 then
+		local forzada = Workspace:GetAttribute("ForzarEscena") == puebloModelo.Name
+		if forzada then
+			Workspace:SetAttribute("ForzarEscena", nil)
+		end
+		local toca = os.clock() >= siguiente and centro and not esDeNoche() and jugadorCerca(centro, (puebloModelo:GetAttribute("Radio") or 60) + 40)
+		if forzada or toca then
+			local ok, err = pcall(function()
+				if forzada or rng:NextNumber() < 0.55 then
 					if not escenaAbuso(puebloModelo, cultura) then
+						if forzada then
+							warn("[NPC] No se pudo montar la escena del callejón en", puebloModelo.Name)
+						end
 						escenaChisme(puebloModelo, cultura)
 					end
 				else
@@ -440,6 +637,7 @@ local function bucleEscenas(puebloModelo)
 				end
 			end)
 			if not ok then
+				warn("[NPC] Escena interrumpida:", err)
 				-- si algo falla, liberamos a todos para que sigan con su vida
 				for _, datos in estado do
 					if datos.pueblo == puebloModelo and datos.ocupado == "escena" then
@@ -447,10 +645,9 @@ local function bucleEscenas(puebloModelo)
 					end
 				end
 			end
-			task.wait(rng:NextNumber(50, 100))
-		else
-			task.wait(5)
+			siguiente = os.clock() + rng:NextNumber(50, 100)
 		end
+		task.wait(2)
 	end
 end
 
@@ -528,6 +725,7 @@ local function registrar(npc)
 		puntos = puntos,
 		original = npc:GetPivot(),
 		ocupado = false,
+		reserva = npc:GetPivot().Position, -- el sitio que ocupa (o al que va)
 	}
 	datos.pistas = cargarAnimaciones(npc)
 	estado[npc] = datos

@@ -134,8 +134,116 @@ local function distanciaRamales(x, z)
 	return mejor
 end
 
+-- Distancia con signo al borde de un pueblo: negativa dentro, positiva fuera.
+-- Las capitales tienen un polígono (ciudadela, rectángulo, forma orgánica...);
+-- las aldeas son círculos.
+local function distanciaForma(sitio, x, z)
+	local p = Vector2.new(x, z)
+	local poligono = sitio.poligono
+	if not poligono then
+		return (p - sitio.centro).Magnitude - sitio.radio
+	end
+	local minimo = math.huge
+	local dentro = false
+	local j = #poligono
+	for i = 1, #poligono do
+		local a, b = poligono[j], poligono[i]
+		minimo = math.min(minimo, distanciaASegmento(p, a, b))
+		if (b.Y > z) ~= (a.Y > z) and x < (a.X - b.X) * (z - b.Y) / (a.Y - b.Y) + b.X then
+			dentro = not dentro
+		end
+		j = i
+	end
+	return if dentro then -minimo else minimo
+end
+Terreno.DistanciaForma = distanciaForma
+
+-- Puntos que se miran para saber si un sitio es llano (según la forma del pueblo)
+local function muestrasForma(pueblo, c)
+	local lista = {}
+	local forma = pueblo.forma
+	if forma and forma.tipo == "Rect" then
+		-- rectángulo con el lado largo en X (eje = "X") o en Z
+		local largoX = if forma.eje == "Z" then forma.ancho else forma.largo
+		local largoZ = if forma.eje == "Z" then forma.largo else forma.ancho
+		for i = 0, 4 do
+			for j = 0, 3 do
+				table.insert(lista, c + Vector2.new((i / 4 - 0.5) * largoX * 0.95, (j / 3 - 0.5) * largoZ * 0.95))
+			end
+		end
+	else
+		local radio = (forma and forma.radio or pueblo.radio) * 0.95
+		table.insert(lista, c)
+		for anillo = 1, 2 do
+			for k = 1, 8 do
+				local angulo = k / 8 * math.pi * 2 + anillo * 0.4
+				table.insert(lista, c + Vector2.new(math.cos(angulo), math.sin(angulo)) * radio * anillo / 2)
+			end
+		end
+	end
+	return lista
+end
+
+-- Cuando ya sabemos hacia dónde mira la puerta, se dibuja el contorno de la capital
+-- y se calcula el punto exacto de la puerta en la muralla.
+local function construirForma(pueblo, sitio)
+	local forma = pueblo.forma
+	if not forma then
+		return
+	end
+	local F = sitio.entrada
+	local R = Vector2.new(-F.Y, F.X)
+	local c = sitio.centro
+	local function mundo(u, v)
+		return c + F * u + R * v
+	end
+	local azar = Random.new(#pueblo.id * 131 + string.byte(pueblo.id, 1))
+	local poligono = {}
+	if forma.tipo == "Rect" then
+		local hu, hv = forma.largo / 2, forma.ancho / 2
+		poligono = { mundo(hu, -hv), mundo(hu, hv), mundo(-hu, hv), mundo(-hu, -hv) }
+	elseif forma.tipo == "Ciudadela" then
+		-- polígono irregular de 9 lados (bastiones en cada esquina)
+		local lados = 9
+		for i = 1, lados do
+			local angulo = (i - 0.5 + azar:NextNumber(-0.18, 0.18)) * math.pi * 2 / lados
+			local r = forma.radio * azar:NextNumber(0.9, 1)
+			table.insert(poligono, mundo(math.cos(angulo) * r, math.sin(angulo) * r))
+		end
+	else -- "Organica": borde ondulado, como crecido sin plan
+		local lados = 22
+		local fase = azar:NextNumber(0, math.pi * 2)
+		for i = 1, lados do
+			local angulo = (i - 0.5) * math.pi * 2 / lados
+			local r = forma.radio * (0.9 + 0.07 * math.sin(3 * angulo + fase) + azar:NextNumber(0, 0.03))
+			table.insert(poligono, mundo(math.cos(angulo) * r, math.sin(angulo) * r))
+		end
+	end
+	sitio.poligono = poligono
+	sitio.forma = forma.tipo
+	-- puerta: donde el rayo centro -> F corta el contorno
+	local mejor = math.huge
+	local j = #poligono
+	for i = 1, #poligono do
+		local a, b = poligono[j], poligono[i]
+		local e = b - a
+		local denominador = F.X * e.Y - F.Y * e.X
+		if math.abs(denominador) > 1e-6 then
+			local w = a - c
+			local t = (w.X * e.Y - w.Y * e.X) / denominador
+			local s = (w.X * F.Y - w.Y * F.X) / denominador
+			if t > 0 and s >= 0 and s <= 1 and t < mejor then
+				mejor = t
+			end
+		end
+		j = i
+	end
+	sitio.puerta = c + F * (if mejor < math.huge then mejor else forma.radio or 100)
+end
+
 -- Busca, cerca de la pista de cada pueblo, el sitio más llano, seco y dentro de su región.
--- Devuelve { [id] = { centro = Vector2, radio = número, altura = número } }
+-- Devuelve { [id] = { centro = Vector2, radio = número, altura = número, entrada = Vector2,
+--   poligono = {Vector2...} (capitales), puerta = Vector2 (capitales) } }
 function Terreno.SitiosPueblos()
 	if sitios then
 		return sitios
@@ -145,30 +253,30 @@ function Terreno.SitiosPueblos()
 	for _, pueblo in PueblosConfig.PUEBLOS do
 		local mejor, mejorPuntos = nil, math.huge
 		local radio = pueblo.radio
-		local busca = radio * 1.4
+		local busca = math.min(radio * 1.4, 200)
 		local region = REGION_DE_CULTURA[pueblo.cultura]
 		for gx = -busca, busca, 16 do
 			for gz = -busca, busca, 16 do
 				if gx * gx + gz * gz <= busca * busca then
 					local c = pueblo.pista + Vector2.new(gx, gz)
 					local minimo, maximo, suma, cuenta, castigo = math.huge, -math.huge, 0, 0, 0
-					for anillo = 0, 2 do
-						local r = radio * anillo / 2
-						local vueltas = if anillo == 0 then 1 else 8
-						for k = 1, vueltas do
-							local angulo = k / vueltas * math.pi * 2
-							local px, pz = c.X + math.cos(angulo) * r, c.Y + math.sin(angulo) * r
-							local d = Terreno.muestrear(px, pz, true)
-							minimo = math.min(minimo, d.altura)
-							maximo = math.max(maximo, d.altura)
-							suma += d.altura
-							cuenta += 1
-							if d.rio > 0.05 or d.lago > 0.05 or d.oasis > 0.05 or d.pantano > 0.05 then
-								castigo += 400 -- nada de pueblos encima del agua
-							end
-							if d.altura < NIVEL_AGUA + 4 then
-								castigo += 400
-							end
+					for _, m in muestrasForma(pueblo, c) do
+						local d = Terreno.muestrear(m.X, m.Y, true)
+						minimo = math.min(minimo, d.altura)
+						maximo = math.max(maximo, d.altura)
+						suma += d.altura
+						cuenta += 1
+						if d.rio > 0.05 or d.lago > 0.05 or d.oasis > 0.05 or d.pantano > 0.05 then
+							castigo += 400 -- nada de pueblos encima del agua
+						end
+						if d.altura < NIVEL_AGUA + 4 then
+							castigo += 400
+						end
+						if (Regiones.Pesos(m.X, m.Y)[region] or 0) < 0.6 then
+							castigo += 150 -- que no se salga de su región
+						end
+						if distanciaCaminos(m.X, m.Y) < 10 then
+							castigo += 120 -- que los caminos grandes no atraviesen la ciudad
 						end
 					end
 					local pesos = Regiones.Pesos(c.X, c.Y)
@@ -196,53 +304,81 @@ function Terreno.SitiosPueblos()
 		table.insert(listaSitios, mejor)
 	end
 
-	-- Caminos: cada capital se une al camino principal más cercano;
-	-- cada aldea, a lo que tenga más cerca (camino principal o la capital de su región)
+	-- Caminos: cada capital se une al camino principal más cercano (desde su puerta);
+	-- cada aldea, a lo que tenga más cerca (camino principal o la puerta de su capital)
 	local principales = {}
 	for _, puntos in puntosPrincipales(8) do
 		for _, punto in puntos do
 			table.insert(principales, punto)
 		end
 	end
-	local capitales = {}
-	for _, pueblo in PueblosConfig.PUEBLOS do
-		if pueblo.tipo == "Capital" then
-			capitales[pueblo.cultura] = elegidos[pueblo.id]
-		end
-	end
-	for i, pueblo in PueblosConfig.PUEBLOS do
-		local sitio = elegidos[pueblo.id]
+	local function masCercano(desde)
 		local destino, distancia = nil, math.huge
 		for _, punto in principales do
-			local dd = (punto - sitio.centro).Magnitude
+			local dd = (punto - desde).Magnitude
 			if dd < distancia then
 				destino, distancia = punto, dd
 			end
 		end
-		local capital = capitales[pueblo.cultura]
-		if pueblo.tipo ~= "Capital" and capital then
-			local dd = (capital.centro - sitio.centro).Magnitude - capital.radio * 0.8
-			if dd < distancia then
-				destino = capital.centro + (sitio.centro - capital.centro).Unit * capital.radio * 0.8
+		return destino, distancia
+	end
+	local function ramal(nombre, desde, destino, doblez)
+		local puntos = curva(desde, destino, doblez)
+		local minimo, maximo = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
+		for _, punto in puntos do
+			minimo = Vector2.new(math.min(minimo.X, punto.X), math.min(minimo.Y, punto.Y))
+			maximo = Vector2.new(math.max(maximo.X, punto.X), math.max(maximo.Y, punto.Y))
+		end
+		table.insert(ramales, {
+			nombre = nombre,
+			puntos = puntos,
+			minimo = minimo - Vector2.new(12, 12),
+			maximo = maximo + Vector2.new(12, 12),
+		})
+	end
+
+	local capitales = {}
+	-- primero las capitales (las aldeas se conectan a su puerta)
+	for i, pueblo in PueblosConfig.PUEBLOS do
+		if pueblo.tipo == "Capital" then
+			local sitio = elegidos[pueblo.id]
+			capitales[pueblo.cultura] = sitio
+			local destino = masCercano(sitio.centro)
+			local direccion = if destino and (destino - sitio.centro).Magnitude > 1 then (destino - sitio.centro).Unit else Vector2.new(0, 1)
+			if pueblo.forma and pueblo.forma.tipo == "Rect" then
+				-- la puerta va en uno de los lados cortos (el que mira al camino)
+				if pueblo.forma.eje == "Z" then
+					direccion = Vector2.new(0, if direccion.Y >= 0 then 1 else -1)
+				else
+					direccion = Vector2.new(if direccion.X >= 0 then 1 else -1, 0)
+				end
+			end
+			sitio.entrada = direccion
+			construirForma(pueblo, sitio)
+			local salida = (sitio.puerta or sitio.centro + direccion * sitio.radio) + direccion * 10
+			if destino and (destino - salida).Magnitude > 20 then
+				ramal("Ramal_" .. pueblo.id, salida, destino, (if i % 2 == 0 then 1 else -1) * 0.12)
 			end
 		end
-		if destino and (destino - sitio.centro).Magnitude > sitio.radio then
-			local doblez = (if i % 2 == 0 then 1 else -1) * 0.12
-			local puntos = curva(sitio.centro, destino, doblez)
-			local minimo, maximo = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
-			for _, punto in puntos do
-				minimo = Vector2.new(math.min(minimo.X, punto.X), math.min(minimo.Y, punto.Y))
-				maximo = Vector2.new(math.max(maximo.X, punto.X), math.max(maximo.Y, punto.Y))
+	end
+	for i, pueblo in PueblosConfig.PUEBLOS do
+		if pueblo.tipo ~= "Capital" then
+			local sitio = elegidos[pueblo.id]
+			local destino, distancia = masCercano(sitio.centro)
+			local capital = capitales[pueblo.cultura]
+			if capital and capital.puerta then
+				local frente = capital.puerta + capital.entrada * 14
+				local dd = (frente - sitio.centro).Magnitude
+				if dd < distancia then
+					destino = frente
+				end
 			end
-			table.insert(ramales, {
-				nombre = "Ramal_" .. pueblo.id,
-				puntos = puntos,
-				minimo = minimo - Vector2.new(12, 12),
-				maximo = maximo + Vector2.new(12, 12),
-			})
-			sitio.entrada = (destino - sitio.centro).Unit -- hacia dónde mira la puerta del pueblo
-		else
-			sitio.entrada = Vector2.new(0, 1)
+			if destino and (destino - sitio.centro).Magnitude > sitio.radio then
+				ramal("Ramal_" .. pueblo.id, sitio.centro, destino, (if i % 2 == 0 then 1 else -1) * 0.12)
+				sitio.entrada = (destino - sitio.centro).Unit -- hacia dónde mira la puerta del pueblo
+			else
+				sitio.entrada = Vector2.new(0, 1)
+			end
 		end
 	end
 
@@ -340,11 +476,12 @@ function Terreno.muestrear(x, z, sinPueblos)
 		for _, sitio in Terreno.SitiosPueblos() do
 			local distancia = (Vector2.new(x, z) - sitio.centro).Magnitude
 			if distancia < sitio.radio + 60 then
+				local alBorde = distanciaForma(sitio, x, z) -- negativo dentro del pueblo
 				local irregular = ruido(x, z, 2, 30, SEMILLA + 40) * 8
-				local peso = 1 - suave(sitio.radio, sitio.radio + 45, distancia + irregular)
+				local peso = 1 - suave(4, 50, alBorde + irregular)
 				h += (sitio.altura - h) * peso
-				d.pueblo = math.max(d.pueblo, 1 - suave(sitio.radio + 8, sitio.radio + 25, distancia))
-				d.dentroPueblo = math.max(d.dentroPueblo, 1 - suave(sitio.radio * 0.9, sitio.radio, distancia))
+				d.pueblo = math.max(d.pueblo, 1 - suave(8, 25, alBorde))
+				d.dentroPueblo = math.max(d.dentroPueblo, 1 - suave(-10, 0, alBorde))
 			end
 		end
 	end
@@ -379,6 +516,16 @@ function Terreno.elegirMaterial(d, pendiente, x, z)
 			return M.Sand
 		end
 		return if ruido(x, z, 1, 30, SEMILLA + 15) > 0 then M.Mud else M.Ground
+	end
+
+	-- Dentro de las ciudades: suelo de tierra pisada (sin hierba que atraviese las calles)
+	if d.dentroPueblo > 0.5 then
+		if esDesierto then
+			return M.Sand
+		elseif d.montana + d.borde > 0.5 then
+			return if h > 200 then M.Snow else M.Slate
+		end
+		return if d.manchas > 0.25 then M.Mud else M.Ground
 	end
 
 	if d.montana + d.borde > 0.5 then
