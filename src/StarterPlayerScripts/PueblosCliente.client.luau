@@ -11,7 +11,12 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local RunService = game:GetService("RunService")
+
 local PueblosConfig = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("PueblosConfig"))
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local RemoteHablar = Remotes:WaitForChild("HablarNPC")
+local RemoteBurbuja = Remotes:WaitForChild("BurbujaNPC")
 local TiendasConfig = require(ReplicatedStorage.Config:WaitForChild("TiendasConfig"))
 
 local jugador = Players.LocalPlayer
@@ -367,7 +372,6 @@ local npcActual = nil
 local frases = {}
 local indiceFrase = 0
 local escribiendo = 0
-local giroOriginal = nil
 
 local function escribir(texto)
 	-- efecto de máquina de escribir
@@ -397,13 +401,10 @@ local function cerrarTodo()
 		if boton then
 			boton.Enabled = true
 		end
-		-- vuelve a mirar hacia donde miraba
-		if giroOriginal and npcActual.Parent then
-			npcActual:PivotTo(giroOriginal)
-		end
+		-- avisamos al servidor: el NPC puede seguir con lo suyo
+		RemoteHablar:FireServer(npcActual, false)
 	end
 	npcActual = nil
-	giroOriginal = nil
 end
 
 local function frasesDe(npc)
@@ -412,6 +413,11 @@ local function frasesDe(npc)
 	local pueblo = npc:GetAttribute("PuebloNombre") or ""
 	local deCultura = PueblosConfig.FRASES[cultura] or {}
 	local lista = deCultura[oficio] or deCultura.Aldeano or { "..." }
+	-- si un noble acaba de humillarlo, te lo cuenta
+	local humillado = npc:GetAttribute("Humillado")
+	if humillado and os.time() - humillado < 240 and PueblosConfig.FRASES_HUMILLADO[cultura] then
+		lista = PueblosConfig.FRASES_HUMILLADO[cultura]
+	end
 	local resultado = {}
 	for _, frase in lista do
 		table.insert(resultado, (string.gsub(frase, "{pueblo}", pueblo)))
@@ -437,17 +443,8 @@ local function hablarCon(npc)
 	if boton then
 		boton.Enabled = false
 	end
-	-- el NPC se gira hacia ti (solo en tu pantalla)
-	local personaje = jugador.Character
-	local raiz = personaje and personaje:FindFirstChild("HumanoidRootPart")
-	if raiz then
-		giroOriginal = npc:GetPivot()
-		local desde = giroOriginal.Position
-		local hacia = Vector3.new(raiz.Position.X, desde.Y, raiz.Position.Z)
-		if (hacia - desde).Magnitude > 0.5 then
-			npc:PivotTo(CFrame.lookAt(desde, hacia))
-		end
-	end
+	-- el servidor hace que el NPC se pare y te mire mientras habláis
+	RemoteHablar:FireServer(npc, true)
 end
 
 botonSeguir.MouseButton1Click:Connect(function()
@@ -503,4 +500,99 @@ task.spawn(function()
 			end
 		end
 	end
+end)
+
+-- ===================================================================
+-- ===== GLOBOS DE TEXTO (lo que dicen los NPC en voz alta) =====
+-- ===================================================================
+
+RemoteBurbuja.OnClientEvent:Connect(function(npc, texto, duracion)
+	if typeof(npc) ~= "Instance" or typeof(texto) ~= "string" then
+		return
+	end
+	local cabeza = npc:FindFirstChild("Head")
+	local camara = Workspace.CurrentCamera
+	if not cabeza or not camara or (cabeza.Position - camara.CFrame.Position).Magnitude > 70 then
+		return
+	end
+	local anterior = cabeza:FindFirstChild("Burbuja")
+	if anterior then
+		anterior:Destroy()
+	end
+	local globo = crear("BillboardGui", {
+		Name = "Burbuja",
+		Size = UDim2.fromOffset(260, 70),
+		StudsOffset = Vector3.new(0, 4.3, 0),
+		MaxDistance = 70,
+		LightInfluence = 0,
+		AlwaysOnTop = false,
+	}, cabeza)
+	local fondo = crear("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 1),
+		Size = UDim2.fromScale(1, 1),
+		AutomaticSize = Enum.AutomaticSize.None,
+		BackgroundColor3 = Color3.fromRGB(245, 236, 214),
+		BackgroundTransparency = 0.05,
+	}, globo)
+	crear("UICorner", { CornerRadius = UDim.new(0, 10) }, fondo)
+	crear("UIStroke", { Color = Color3.fromRGB(90, 70, 46), Thickness = 1.5 }, fondo)
+	crear("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, fondo)
+	local etiqueta = crear("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = FUENTE,
+		TextScaled = true,
+		TextWrapped = true,
+		TextColor3 = Color3.fromRGB(40, 30, 22),
+		Text = texto,
+	}, fondo)
+	crear("UITextSizeConstraint", { MaxTextSize = 22, MinTextSize = 12 }, etiqueta)
+	task.delay(duracion or 4, function()
+		if globo.Parent then
+			TweenService:Create(fondo, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(etiqueta, TweenInfo.new(0.5), { TextTransparency = 1 }):Play()
+			task.wait(0.6)
+			globo:Destroy()
+		end
+	end)
+end)
+
+-- ===================================================================
+-- ===== ASPAS DE MOLINO QUE GIRAN (solo en tu pantalla) =====
+-- ===================================================================
+
+task.spawn(function()
+	local mundo = Workspace:WaitForChild("Mundo", 60)
+	local carpeta = mundo and mundo:WaitForChild("Pueblos", 60)
+	if not carpeta then
+		return
+	end
+	local giratorios = {}
+	local function buscar()
+		table.clear(giratorios)
+		for _, d in carpeta:GetDescendants() do
+			if d:IsA("Model") and d:GetAttribute("Girar") then
+				table.insert(giratorios, { modelo = d, base = d:GetPivot(), centro = d:GetAttribute("Centro"), eje = d:GetAttribute("Eje") })
+			end
+		end
+	end
+	buscar()
+	carpeta.DescendantAdded:Connect(function(d)
+		if d:IsA("Model") and d:GetAttribute("Girar") then
+			task.wait()
+			buscar()
+		end
+	end)
+	local angulo = 0
+	RunService.RenderStepped:Connect(function(dt)
+		angulo += dt * (0.5 + Workspace.GlobalWind.Magnitude * 0.05)
+		local camara = Workspace.CurrentCamera
+		for _, g in giratorios do
+			if g.centro and g.eje and camara and (g.centro - camara.CFrame.Position).Magnitude < 400 then
+				local rotacion = CFrame.new(g.centro) * CFrame.fromAxisAngle(g.eje, angulo) * CFrame.new(-g.centro)
+				g.modelo:PivotTo(rotacion * g.base)
+			end
+		end
+	end)
 end)

@@ -110,7 +110,8 @@ end
 -- ===================================================================
 -- ===== CASAS DE CADA CULTURA =====
 -- Todas reciben cf = centro del suelo, con la puerta hacia -Z. Devuelven el modelo,
--- su "radio" (para no chocar con otras) y la altura del alero (para colgar carteles).
+-- su "radio" (para no chocar con otras), la altura del alero (para colgar carteles)
+-- y el punto delante de la puerta (donde entra y sale la gente que vive ahí).
 -- ===================================================================
 
 local Casas = {}
@@ -167,7 +168,7 @@ function Casas.Reino(padre, cf, opciones)
 		end
 	end
 	modelo.Parent = padre
-	return modelo, math.max(ancho, fondo) * 0.62, 0.5 + h1
+	return modelo, math.max(ancho, fondo) * 0.62, 0.5 + h1, cf * CFrame.new(0, 0, -fondo / 2 - 3)
 end
 
 -- Imperio del sol: casas cúbicas de arenisca, azotea, vigas asomando, arcos, toldos y cúpulas
@@ -261,7 +262,7 @@ function Casas.Sol(padre, cf, opciones)
 		end
 	end
 	modelo.Parent = padre
-	return modelo, math.max(ancho, fondo) * 0.62, 0.5 + h
+	return modelo, math.max(ancho, fondo) * 0.62, 0.5 + h, cf * CFrame.new(0, 0, -fondo / 2 - 3)
 end
 
 -- Ciudad de los brujos: casas altas y torcidas de madera negra, ventanas que brillan morado
@@ -318,7 +319,7 @@ function Casas.Brujos(padre, cf, opciones)
 	bloque(modelo, chimenea, Vector3.new(1.6, subida + 4, 1.6), M.Basalt, Color3.fromRGB(60, 56, 62), "Chimenea")
 	C.humo(modelo, (chimenea * CFrame.new(0, (subida + 4) / 2 + 0.6, 0)).Position, Color3.fromRGB(110, 90, 130))
 	modelo.Parent = padre
-	return modelo, math.max(a, f) * 0.62, 6.4
+	return modelo, math.max(a, f) * 0.62, 6.4, cf * CFrame.new(0, 0, -fondo / 2 - 3)
 end
 
 -- Fortaleza del norte: casas largas de troncos, tejado empinado con nieve, vigas cruzadas
@@ -410,7 +411,7 @@ function Casas.Norte(padre, cf, opciones)
 		})
 	end
 	modelo.Parent = padre
-	return modelo, math.max(ancho, fondo) * 0.6, 0.5 + altoMuro
+	return modelo, math.max(ancho, fondo) * 0.6, 0.5 + altoMuro, cf * CFrame.new(0, 0, -fondo / 2 - 3.5)
 end
 
 -- ===================================================================
@@ -955,6 +956,255 @@ local COLOR_FAROL = {
 }
 
 -- ===================================================================
+-- ===== RASGOS: lo que hace única a cada aldea =====
+-- Cada función recibe cf = centro del rasgo mirando hacia la plaza.
+-- ===================================================================
+
+local Rasgos = {}
+
+-- Molino de viento con aspas que giran (el cliente las hace girar) y campos de trigo
+function Rasgos.Molino(modelo, cf)
+	local torre = cf * CFrame.new(0, 0, 0)
+	cimientos(modelo, torre, 9, 9, Color3.fromRGB(120, 116, 108))
+	C.columna(modelo, torre.Position + Vector3.new(0, 0.5, 0), 16, 9, M.Cobblestone, Color3.fromRGB(196, 190, 176), "TorreMolino")
+	C.cono(modelo, torre.Position + Vector3.new(0, 16.5, 0), 11, 7, M.WoodPlanks, Color3.fromRGB(90, 64, 42), "TejadoMolino")
+	C.puerta(modelo, torre * CFrame.new(0, 0.5, -4.55), 3, 6, { color = Color3.fromRGB(96, 64, 40) })
+	-- eje y aspas (girarán en el cliente alrededor del eje)
+	local eje = C.bloque(modelo, torre * CFrame.new(0, 14, -5.4), Vector3.new(1.2, 1.2, 1.6), M.Wood, Color3.fromRGB(70, 50, 34), "EjeMolino")
+	local aspas = Instance.new("Model")
+	aspas.Name = "Aspas"
+	for k = 0, 3 do
+		local giro = eje.CFrame * CFrame.Angles(0, 0, k * math.pi / 2)
+		C.bloque(aspas, giro * CFrame.new(0, 6.5, -0.6), Vector3.new(0.5, 13, 0.4), M.Wood, Color3.fromRGB(110, 80, 52), "Brazo")
+		C.bloque(aspas, giro * CFrame.new(1.3, 7.5, -0.7), Vector3.new(2.4, 10, 0.12), M.Fabric, Color3.fromRGB(230, 222, 200), "Vela")
+	end
+	aspas:SetAttribute("Girar", true)
+	aspas:SetAttribute("Centro", eje.Position)
+	aspas:SetAttribute("Eje", eje.CFrame.LookVector)
+	aspas.Parent = modelo
+	-- campos de trigo a un lado
+	for campo = -1, 1, 2 do
+		local base = cf * CFrame.new(campo * 16, 0, 6)
+		C.bloque(modelo, base * CFrame.new(0, 0.1, 0), Vector3.new(12, 0.4, 14), M.Ground, Color3.fromRGB(110, 86, 60), "Campo")
+		for fila = -5, 5, 2 do
+			for col = -6, 6, 1.5 do
+				local espiga = C.bloque(modelo, base * CFrame.new(fila + n(-0.2, 0.2), 1.1, col) * CFrame.Angles(n(-0.1, 0.1), 0, n(-0.1, 0.1)), Vector3.new(0.3, 2, 0.3), M.Grass, Color3.fromRGB(214, 186, 96), "Trigo")
+				espiga.CanCollide = false
+			end
+		end
+	end
+	-- espantapájaros
+	local esp = cf * CFrame.new(16, 0, 6)
+	C.columna(modelo, esp.Position, 5, 0.3, M.Wood, Color3.fromRGB(90, 66, 44), "Palo")
+	C.bloque(modelo, esp * CFrame.new(0, 3.8, 0), Vector3.new(3, 0.3, 0.3), M.Wood, Color3.fromRGB(90, 66, 44), "Brazos")
+	C.bloque(modelo, esp * CFrame.new(0, 3.4, 0), Vector3.new(1.4, 1.8, 0.8), M.Fabric, Color3.fromRGB(150, 60, 50), "Camisa")
+	C.bola(modelo, (esp * CFrame.new(0, 4.9, 0)).Position, 1.1, M.Fabric, Color3.fromRGB(210, 190, 140), "Cabeza")
+	return 24
+end
+
+-- Aserradero: pilas de troncos, banco de sierra, carro y tocón con hacha
+function Rasgos.Aserradero(modelo, cf)
+	for pila = -1, 1, 2 do
+		local base = cf * CFrame.new(pila * 7, 0, 0)
+		for fila = 0, 2 do
+			for k = 0, 3 - fila do
+				C.parte({
+					Name = "Tronco",
+					Shape = Enum.PartType.Cylinder,
+					CFrame = base * CFrame.new(-2.2 + k * 1.5 + fila * 0.75, 0.75 + fila * 1.3, 0) * CFrame.Angles(0, math.pi / 2, 0),
+					Size = Vector3.new(9, 1.5, 1.5),
+					Material = M.Wood,
+					Color = variar(Color3.fromRGB(120, 88, 58), 0.05),
+					Parent = modelo,
+				})
+			end
+		end
+	end
+	-- banco de sierra con tronco a medio cortar
+	local banco = cf * CFrame.new(0, 0, -8)
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			C.bloque(modelo, banco * CFrame.new(sx * 3, 1, sz * 0.8), Vector3.new(0.4, 2, 0.4), M.Wood, Color3.fromRGB(90, 66, 44), "Pata")
+		end
+	end
+	C.bloque(modelo, banco * CFrame.new(0, 2.1, 0), Vector3.new(7, 0.3, 2), M.WoodPlanks, Color3.fromRGB(130, 96, 62), "Mesa")
+	C.parte({ Name = "TroncoCorte", Shape = Enum.PartType.Cylinder, CFrame = banco * CFrame.new(0, 2.9, 0), Size = Vector3.new(6, 1.3, 1.3), Material = M.Wood, Color = Color3.fromRGB(120, 88, 58), Parent = modelo })
+	C.bloque(modelo, banco * CFrame.new(0.5, 3.6, 0) * CFrame.Angles(0, 0, math.rad(80)), Vector3.new(0.1, 3, 0.8), M.Metal, Color3.fromRGB(170, 172, 176), "Sierra")
+	-- tocón con hacha clavada
+	local toco = cf * CFrame.new(-9, 0, -7)
+	C.columna(modelo, toco.Position, 1.6, 2.4, M.Wood, Color3.fromRGB(110, 80, 52), "Tocon")
+	C.bloque(modelo, toco * CFrame.new(0, 2.6, 0) * CFrame.Angles(0, 0, math.rad(20)), Vector3.new(0.25, 2.4, 0.25), M.Wood, Color3.fromRGB(90, 66, 44), "Mango")
+	C.bloque(modelo, toco * CFrame.new(-0.35, 1.7, 0) * CFrame.Angles(0, 0, math.rad(20)), Vector3.new(0.9, 0.6, 0.12), M.Metal, Color3.fromRGB(150, 150, 156), "Hoja")
+	-- carro de madera
+	local carro = cf * CFrame.new(9, 0, -7) * CFrame.Angles(0, 0.4, 0)
+	C.bloque(modelo, carro * CFrame.new(0, 2, 0), Vector3.new(6, 0.4, 3.4), M.WoodPlanks, Color3.fromRGB(130, 96, 62), "Plataforma")
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			C.parte({ Name = "Rueda", Shape = Enum.PartType.Cylinder, CFrame = carro * CFrame.new(sx * 1.8, 1.2, sz * 1.9) * CFrame.Angles(0, math.pi / 2, 0), Size = Vector3.new(0.4, 2.4, 2.4), Material = M.Wood, Color = Color3.fromRGB(80, 58, 38), Parent = modelo })
+		end
+	end
+	return 15
+end
+
+-- Bazar: puestos de colores con alfombras, tinajas y sacos de especias
+function Rasgos.Bazar(modelo, cf)
+	local colores = { Color3.fromRGB(36, 120, 132), Color3.fromRGB(190, 64, 46), Color3.fromRGB(226, 160, 50), Color3.fromRGB(110, 40, 90), Color3.fromRGB(40, 90, 150) }
+	for k = 0, 5 do
+		local angulo = (k - 2.5) * 0.42
+		-- el mostrador mira hacia la plaza
+		local puesto = cf * CFrame.Angles(0, angulo, 0) * CFrame.new(0, 0, 14)
+		for _, sx in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				C.columna(modelo, (puesto * CFrame.new(sx * 2.4, 0, sz * 1.8)).Position, 6, 0.3, M.Wood, Color3.fromRGB(110, 76, 46), "Poste")
+			end
+		end
+		C.bloque(modelo, puesto * CFrame.new(0, 6.1, 0) * CFrame.Angles(math.rad(8), 0, 0), Vector3.new(5.6, 0.15, 4.4), M.Fabric, colores[k % #colores + 1], "Tela").CanCollide = false
+		C.bloque(modelo, puesto * CFrame.new(0, 1.3, -1.4), Vector3.new(4.6, 2.6, 1.2), M.WoodPlanks, Color3.fromRGB(150, 110, 70), "Mostrador")
+		-- alfombra en el suelo
+		C.bloque(modelo, puesto * CFrame.new(0, 0.08, -4), Vector3.new(4, 0.1, 2.6), M.Fabric, colores[(k + 2) % #colores + 1], "Alfombra").CanCollide = false
+		for s = -1, 1 do
+			C.saco(modelo, (puesto * CFrame.new(s * 1.3, 2.6, -1.4)).Position - Vector3.new(0, 0.7, 0), elegir({ Color3.fromRGB(200, 120, 40), Color3.fromRGB(170, 40, 30), Color3.fromRGB(220, 190, 70) }))
+		end
+	end
+	return 18
+end
+
+-- Caravana: tiendas de lona, hoguera y mercancías
+function Rasgos.Caravana(modelo, cf)
+	for k = 0, 3 do
+		local angulo = k * math.pi / 2 + 0.4
+		local tienda = cf * CFrame.Angles(0, angulo, 0) * CFrame.new(0, 0, 11)
+		local color = elegir({ Color3.fromRGB(220, 200, 160), Color3.fromRGB(196, 120, 70), Color3.fromRGB(150, 60, 50) })
+		for _, lado in { -1, 1 } do
+			C.parte({
+				Name = "Lona",
+				-- cada lona es media "A": su lado alto queda en el centro de la tienda
+				CFrame = tienda * CFrame.new(lado * 2, 2.5, 0) * CFrame.Angles(0, if lado > 0 then -math.pi / 2 else math.pi / 2, 0),
+				Size = Vector3.new(7, 5, 4),
+				Material = M.Fabric,
+				Color = color,
+				Parent = modelo,
+			}, "WedgePart")
+		end
+	end
+	C.fuego(modelo, cf.Position + Vector3.new(0, 1, 0), 3)
+	for k = 1, 8 do
+		local angulo = k / 8 * math.pi * 2
+		C.bloque(modelo, CFrame.new(cf.Position + Vector3.new(math.cos(angulo) * 2.2, 0.4, math.sin(angulo) * 2.2)), Vector3.new(1, 0.8, 1), M.Sandstone, Color3.fromRGB(150, 130, 100), "Piedra")
+	end
+	for k = 1, 6 do
+		local p = cf * CFrame.new(n(-14, 14), 0, n(-14, 14))
+		if rng:NextNumber() < 0.5 then
+			C.caja(modelo, p.Position)
+		else
+			C.barril(modelo, p.Position)
+		end
+	end
+	return 16
+end
+
+-- Santuario de velas y cementerio
+function Rasgos.Velas(modelo, cf)
+	C.bloque(modelo, cf * CFrame.new(0, 1.2, 0), Vector3.new(8, 2.4, 4), M.Basalt, Color3.fromRGB(60, 56, 62), "Altar")
+	for k = 1, 28 do
+		local p = cf * CFrame.new(n(-3.6, 3.6), 2.4, n(-1.6, 1.6))
+		local alto = n(0.5, 1.6)
+		C.columna(modelo, p.Position, alto, n(0.3, 0.5), M.SmoothPlastic, Color3.fromRGB(236, 228, 210), "Vela")
+		local llama = C.bola(modelo, p.Position + Vector3.new(0, alto + 0.15, 0), 0.25, M.Neon, Color3.fromRGB(255, 180, 90), "Llama")
+		llama.CanCollide = false
+		if k % 7 == 0 then
+			C.luz(llama, Color3.fromRGB(255, 170, 90), 1.2, 12)
+		end
+	end
+	-- cementerio con lápidas torcidas
+	for fila = 0, 2 do
+		for col = -2, 2 do
+			local p = cf * CFrame.new(col * 4 + n(-0.5, 0.5), 0, 8 + fila * 4)
+			C.bloque(modelo, p * CFrame.new(0, 1.2, 0) * CFrame.Angles(math.rad(n(-8, 8)), math.rad(n(-10, 10)), math.rad(n(-8, 8))), Vector3.new(1.8, 2.6, 0.45), M.Slate, Color3.fromRGB(96, 94, 100), "Lapida")
+		end
+	end
+	return 18
+end
+
+-- Pasarelas de madera sobre pilotes con niebla del pantano
+function Rasgos.Pilotes(modelo, cf)
+	for tramo = -3, 3 do
+		local p = cf * CFrame.new(tramo * 5, 0, math.sin(tramo) * 3)
+		C.bloque(modelo, p * CFrame.new(0, 2.2, 0), Vector3.new(5.2, 0.4, 3), M.WoodPlanks, Color3.fromRGB(70, 56, 44), "Pasarela")
+		for _, sz in { -1, 1 } do
+			C.columna(modelo, (p * CFrame.new(-2.4, -2, sz * 1.3)).Position, 4.4, 0.5, M.Wood, Color3.fromRGB(50, 40, 34), "Pilote")
+		end
+		if tramo % 2 == 0 then
+			C.farol(modelo, (p * CFrame.new(0, 2.4, 1.6)).Position, Color3.fromRGB(150, 255, 160), { alto = 4.5, brillo = 1 })
+		end
+	end
+	local niebla = C.parte({ Name = "Niebla", CFrame = cf * CFrame.new(0, 1, 0), Size = Vector3.new(36, 1, 16), Transparency = 1, CanCollide = false, CanQuery = false, Parent = modelo })
+	local e = Instance.new("ParticleEmitter")
+	e.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	e.Rate = 6
+	e.Lifetime = NumberRange.new(8, 12)
+	e.Speed = NumberRange.new(0.2, 0.6)
+	e.Size = NumberSequence.new(6, 12)
+	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.8), NumberSequenceKeypoint.new(1, 1) })
+	e.Color = ColorSequence.new(Color3.fromRGB(160, 180, 170))
+	e.Parent = niebla
+	return 20
+end
+
+-- Cazadores: secaderos de pieles, cornamentas y hoguera
+function Rasgos.Cazadores(modelo, cf)
+	for k = -1, 1 do
+		local base = cf * CFrame.new(k * 6, 0, 0)
+		for _, sx in { -1, 1 } do
+			C.columna(modelo, (base * CFrame.new(sx * 2.2, 0, 0)).Position, 5, 0.4, M.Wood, Color3.fromRGB(90, 66, 44), "Poste")
+		end
+		C.bloque(modelo, base * CFrame.new(0, 4.8, 0), Vector3.new(5, 0.3, 0.3), M.Wood, Color3.fromRGB(90, 66, 44), "Travesano")
+		C.bloque(modelo, base * CFrame.new(0, 3, 0), Vector3.new(3.8, 3.4, 0.12), M.Fabric, variar(Color3.fromRGB(130, 96, 66), 0.06), "Piel").CanCollide = false
+	end
+	C.fuego(modelo, (cf * CFrame.new(0, 1, -7)).Position, 3)
+	for k = 1, 8 do
+		local angulo = k / 8 * math.pi * 2
+		C.bloque(modelo, CFrame.new((cf * CFrame.new(math.cos(angulo) * 2.2, 0.4, -7 + math.sin(angulo) * 2.2)).Position), Vector3.new(1, 0.8, 1), M.Slate, Color3.fromRGB(100, 100, 104), "Piedra")
+	end
+	-- cornamenta sobre un poste
+	local poste = cf * CFrame.new(-10, 0, -6)
+	C.columna(modelo, poste.Position, 6, 0.5, M.Wood, Color3.fromRGB(90, 66, 44), "Poste")
+	for _, s in { -1, 1 } do
+		C.liston(modelo, (poste * CFrame.new(0, 6, 0)).Position, (poste * CFrame.new(s * 1.6, 7.6, 0)).Position, 0.2, M.Wood, Color3.fromRGB(226, 214, 190), "Asta")
+		C.liston(modelo, (poste * CFrame.new(s * 1, 6.9, 0)).Position, (poste * CFrame.new(s * 1.4, 8, 0.4)).Position, 0.15, M.Wood, Color3.fromRGB(226, 214, 190), "Asta")
+	end
+	return 14
+end
+
+-- Mina: entrada en la roca con vigas, raíles y vagoneta
+function Rasgos.Mina(modelo, cf)
+	-- montículo de roca
+	for k = 1, 10 do
+		local p = cf * CFrame.new(n(-8, 8), n(1, 6), n(4, 10))
+		C.bloque(modelo, p * CFrame.Angles(n(0, 1), n(0, 3), n(0, 1)), Vector3.new(n(5, 9), n(4, 8), n(5, 9)), M.Slate, variar(Color3.fromRGB(104, 104, 110), 0.04), "Roca")
+	end
+	C.bloque(modelo, cf * CFrame.new(0, 3.4, 3.2), Vector3.new(5, 6.6, 0.4), M.SmoothPlastic, Color3.fromRGB(10, 10, 12), "Entrada")
+	for _, sx in { -1, 1 } do
+		C.bloque(modelo, cf * CFrame.new(sx * 2.8, 3.5, 2.8), Vector3.new(0.8, 7, 0.8), M.Wood, Color3.fromRGB(90, 66, 44), "Viga")
+	end
+	C.bloque(modelo, cf * CFrame.new(0, 7.2, 2.8), Vector3.new(6.6, 0.8, 0.8), M.Wood, Color3.fromRGB(90, 66, 44), "Dintel")
+	C.farol(modelo, (cf * CFrame.new(3.6, 0, 2)).Position, Color3.fromRGB(255, 170, 90), { alto = 5 })
+	-- raíles saliendo de la mina
+	for _, sx in { -0.8, 0.8 } do
+		C.bloque(modelo, cf * CFrame.new(sx, 0.2, -6), Vector3.new(0.2, 0.2, 18), M.Metal, Color3.fromRGB(80, 78, 76), "Rail")
+	end
+	for z = -14, 2, 2 do
+		C.bloque(modelo, cf * CFrame.new(0, 0.1, z), Vector3.new(2.6, 0.2, 0.5), M.Wood, Color3.fromRGB(80, 60, 40), "Traviesa")
+	end
+	local vagon = cf * CFrame.new(0, 1.3, -8)
+	C.bloque(modelo, vagon, Vector3.new(2.4, 1.6, 3.2), M.Metal, Color3.fromRGB(70, 66, 62), "Vagoneta")
+	for k = 1, 4 do
+		C.bloque(modelo, vagon * CFrame.new(n(-0.7, 0.7), 1, n(-1, 1)) * CFrame.Angles(n(0, 3), n(0, 3), 0), Vector3.new(0.8, 0.8, 0.8), M.Slate, Color3.fromRGB(60, 62, 70), "Mineral")
+	end
+	return 15
+end
+
+-- ===================================================================
 -- ===== CONSTRUIR UN PUEBLO =====
 -- ===================================================================
 
@@ -979,6 +1229,17 @@ local function construirPueblo(padre, pueblo, sitio)
 	modelo:SetAttribute("Centro", centro)
 	modelo:SetAttribute("Radio", radio)
 
+	-- Puntos por los que camina la gente (los usa NPCServicio)
+	local puntos = Instance.new("Folder")
+	puntos.Name = "Puntos"
+	puntos.Parent = modelo
+	local function punto(tipo, p)
+		local v = Instance.new("Vector3Value")
+		v.Name = tipo
+		v.Value = Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z)
+		v.Parent = puntos
+	end
+
 	local ocupados = {} -- { posicion, radio } para que nada se pise
 	local function libre(p, r)
 		for _, o in ocupados do
@@ -1001,18 +1262,32 @@ local function construirPueblo(padre, pueblo, sitio)
 
 	-- 1) Plaza central
 	local plaza = centro + haciaEntrada * radio * (if esCapital then 0.12 else 0)
-	local radioPlaza = if esCapital then 22 else 13
+	local radioPlaza = if esCapital then 22 else 15
 	local suelo = SUELO_PLAZA[culturaId]
 	C.disco(modelo, plaza, radioPlaza * 2, suelo[1], suelo[2])
 	Centros[culturaId](modelo, plaza, esCapital, cultura)
 	ocupar(plaza, radioPlaza)
+	for k = 1, 8 do
+		local angulo = k / 8 * math.pi * 2
+		punto("Plaza", plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (radioPlaza * 0.75))
+	end
+	for t = radioPlaza + 8, radio * 0.85, 14 do
+		punto("Calle", plaza + haciaEntrada * t)
+	end
 
-	-- 2) Edificio principal (detrás de la plaza)
+	-- 2) Edificio principal (capitales) o rasgo propio (aldeas), detrás de la plaza
 	if esCapital then
 		local p = centro - haciaEntrada * radio * 0.55
 		local cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza)
 		local _, r = Principales[culturaId](modelo, cf, cultura)
 		ocupar(p, r)
+		punto("Plaza", (cf * CFrame.new(0, 0, -r - 4)).Position)
+	elseif pueblo.rasgo and Rasgos[pueblo.rasgo] then
+		local p = plaza - haciaEntrada * (radioPlaza + 26)
+		local cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza)
+		local r = Rasgos[pueblo.rasgo](modelo, cf)
+		ocupar(p, r)
+		punto("Rasgo", (cf * CFrame.new(0, 0, -r * 0.6)).Position)
 	end
 
 	-- 3) Tiendas alrededor de la plaza, mirando a la fuente
@@ -1020,36 +1295,38 @@ local function construirPueblo(padre, pueblo, sitio)
 	local tiendas = pueblo.tiendas
 	local distanciaTienda = radioPlaza + 15
 	for i, tipo in tiendas do
-		-- repartidas por los lados de la plaza (sin tapar la calle de la entrada)
 		local total = #tiendas
 		local abanico = if esCapital then math.rad(250) else math.rad(150)
 		local base = math.atan2(-entrada.Y, -entrada.X) -- hacia el fondo
-		local angulo = base + (if total == 1 then 0 else (i - 1) / (total - 1) - 0.5) * abanico
+		local angulo = base + (if total == 1 then 0.6 else (i - 1) / (total - 1) - 0.5) * abanico
 		local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * distanciaTienda
 		local cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza)
 		local tendero, r = tienda(modelo, cf, tipo, culturaId, cultura)
 		ocupar(p, r - 4)
-		table.insert(npcs, { oficio = tipo, cf = tendero, tienda = tipo })
+		table.insert(npcs, { oficio = tipo, cf = tendero, tienda = tipo, rol = "Tendero", clase = "Plebeyo" })
+		punto("Tienda", (tendero * CFrame.new(0, 0, -6.5)).Position)
 	end
 
-	-- 4) Casas en anillos alrededor
-	local casas = if esCapital then 26 else rng:NextInteger(5, 7)
+	-- 4) Casas en anillos alrededor (la gente vive en ellas)
+	local casas = {}
+	local cuantas = if esCapital then 26 else rng:NextInteger(12, 15)
 	local intentos = 0
-	local puestas = 0
-	while puestas < casas and intentos < casas * 30 do
+	while #casas < cuantas and intentos < cuantas * 40 do
 		intentos += 1
 		local angulo = n(0, math.pi * 2)
-		local distancia = n(radioPlaza + 18, radio * (if esCapital then 0.82 else 0.85))
+		local distancia = n(radioPlaza + 18, radio * (if esCapital then 0.82 else 0.86))
 		local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * distancia
-		if (p - centro).Magnitude < radio * 0.86 then
+		if (p - centro).Magnitude < radio * 0.88 then
 			local estimado = if culturaId == "Norte" then 15 else 10.5
 			if libre(p, estimado) then
 				local yy = sueloEn(p.X, p.Z, y)
 				-- las casas miran hacia la plaza, con un poco de desorden
 				local cf = mirandoA(Vector3.new(p.X, yy, p.Z), plaza) * CFrame.Angles(0, math.rad(n(-14, 14)), 0)
-				local _, r = Casas[culturaId](modelo, cf)
+				local casa, r, _, puerta = Casas[culturaId](modelo, cf)
+				casa.Name = "Casa" .. (#casas + 1)
 				ocupar(p, r)
-				puestas += 1
+				table.insert(casas, puerta.Position)
+				punto("Puerta", puerta.Position)
 				-- detalles junto a la casa
 				local junto = (cf * CFrame.new(n(-5, 5), 0, -r - 1.5)).Position
 				if rng:NextNumber() < 0.5 then
@@ -1063,7 +1340,7 @@ local function construirPueblo(padre, pueblo, sitio)
 
 	-- 5) Faroles: alrededor de la plaza y por la calle de la entrada
 	local colorFarol = COLOR_FAROL[culturaId]
-	local cuantosFaroles = if esCapital then 8 else 4
+	local cuantosFaroles = if esCapital then 8 else 5
 	for k = 1, cuantosFaroles do
 		local angulo = k / cuantosFaroles * math.pi * 2 + 0.2
 		local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (radioPlaza + 1.5)
@@ -1082,13 +1359,13 @@ local function construirPueblo(padre, pueblo, sitio)
 		local puerta, sueloPuerta = muralla(modelo, centro, radio * 0.95, entrada, culturaId, cultura)
 		puertaP = Vector3.new(puerta.X, sueloPuerta, puerta.Z)
 	else
-		valla(modelo, centro, radio * 0.92, entrada, culturaId)
+		valla(modelo, centro, radio * 0.93, entrada, culturaId)
 	end
 
 	-- 7) Un poco de vegetación del lugar dentro del pueblo
 	local plantas = { Reino = "HayaJoven", Sol = nil, Brujos = "Helecho", Norte = nil }
 	if plantas[culturaId] then
-		for _ = 1, (if esCapital then 6 else 3) do
+		for _ = 1, (if esCapital then 6 else 5) do
 			local angulo = n(0, math.pi * 2)
 			local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * n(radioPlaza + 4, radio * 0.8)
 			if libre(p, 3) then
@@ -1097,7 +1374,7 @@ local function construirPueblo(padre, pueblo, sitio)
 			end
 		end
 	elseif culturaId == "Sol" then
-		for _ = 1, (if esCapital then 8 else 4) do
+		for _ = 1, (if esCapital then 8 else 6) do
 			local angulo = n(0, math.pi * 2)
 			local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * n(radioPlaza + 4, radio * 0.8)
 			if libre(p, 3) then
@@ -1107,39 +1384,52 @@ local function construirPueblo(padre, pueblo, sitio)
 		end
 	end
 
-	-- 8) NPC: tenderos, guardias en la puerta y aldeanos en la plaza
+	-- 8) Gente: tenderos (ya puestos), guardias, nobles y plebeyos que viven en las casas
 	if puertaP then
 		for _, s in { -1, 1 } do
 			local p = puertaP + lateral * s * 4 + haciaEntrada * 2
-			table.insert(npcs, { oficio = "Guardia", cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), p + haciaEntrada * 10) })
+			table.insert(npcs, { oficio = "Guardia", cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), p + haciaEntrada * 10), rol = "Guardia", clase = "Plebeyo" })
 		end
 	end
-	local aldeanos = if esCapital then 3 else 2
-	for k = 1, aldeanos do
-		local angulo = k / aldeanos * math.pi * 2 + n(-0.4, 0.4)
-		local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (radioPlaza * 0.7)
-		table.insert(npcs, { oficio = "Aldeano", cf = mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza + Vector3.new(n(-8, 8), 0, n(-8, 8))) })
+	local nobles = if esCapital then 3 else 1
+	local plebeyos = if esCapital then 10 else 7
+	local casaSiguiente = 1
+	local function sitioInicial()
+		local angulo = n(0, math.pi * 2)
+		local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * n(radioPlaza * 0.3, radioPlaza * 0.85)
+		return mirandoA(Vector3.new(p.X, sueloEn(p.X, p.Z, y), p.Z), plaza + Vector3.new(n(-8, 8), 0, n(-8, 8)))
 	end
+	for k = 1, nobles + plebeyos do
+		local clase = if k <= nobles then "Noble" else "Plebeyo"
+		local casa = casas[casaSiguiente]
+		casaSiguiente = casaSiguiente % math.max(#casas, 1) + 1
+		table.insert(npcs, {
+			oficio = if clase == "Noble" then "Noble" else "Aldeano",
+			cf = sitioInicial(),
+			rol = "Paseante",
+			clase = clase,
+			casa = casa,
+		})
+	end
+
 	local carpetaNPC = Instance.new("Folder")
 	carpetaNPC.Name = "NPC"
 	carpetaNPC.Parent = modelo
 	local nombresUsados = {}
 	for _, datos in npcs do
-		local lista = PueblosConfig.NOMBRES[culturaId]
-		local nombre = lista[rng:NextInteger(1, #lista)]
-		local intentosNombre = 0
-		while nombresUsados[nombre] and intentosNombre < 20 do
-			nombre = lista[rng:NextInteger(1, #lista)]
-			intentosNombre += 1
-		end
-		nombresUsados[nombre] = true
+		local identidad = NPCs.Identidad(culturaId, datos.oficio, datos.clase, nombresUsados)
 		NPCs.Crear(carpetaNPC, {
-			nombre = nombre,
+			nombre = identidad.nombre,
+			titulo = identidad.titulo,
+			genero = identidad.genero,
+			clase = datos.clase,
+			rol = datos.rol,
 			oficio = datos.oficio,
 			tienda = datos.tienda,
 			cultura = culturaId,
 			pueblo = pueblo,
 			cf = datos.cf,
+			casa = datos.casa,
 		})
 	end
 
