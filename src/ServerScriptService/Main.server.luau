@@ -9,10 +9,12 @@ local EstaminaServicio = require(Combate.EstaminaServicio)
 local EsquivaServicio = require(Combate.EsquivaServicio)
 
 local ClimaServicio = require(script.Parent.Mundo.ClimaServicio)
+local NPCServicio = require(script.Parent.Mundo.NPCServicio)
 
 EstaminaServicio.Iniciar()
 EsquivaServicio.Iniciar()
 ClimaServicio.Iniciar()
+NPCServicio.Iniciar()
 
 print("[SERVIDOR] Juego iniciado. Nivel máximo:", Constantes.NIVEL_MAXIMO)
 print("[SERVIDOR] Armas cargadas:", #Constantes.ARMAS)

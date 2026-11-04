@@ -13,6 +13,8 @@
 --   Terreno     -> alturas, materiales, agua e isla
 --   Vegetacion  -> árboles, cactus, hongos, flores, rocas
 --   Estructuras -> fogata, puentes, Altar del Ascenso, ruinas y nubes de la isla
+--   Pueblos     -> ciudades y aldeas de cada cultura, con tiendas y NPC
+--                  (usa Construccion para las piezas y NPCs para la gente)
 
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
@@ -23,6 +25,7 @@ local Mundo = script.Parent.Mundo
 local Terreno = require(Mundo.Terreno)
 local Vegetacion = require(Mundo.Vegetacion)
 local Estructuras = require(Mundo.Estructuras)
+local Pueblos = require(Mundo.Pueblos)
 
 local Materiales = require(script.Parent.Materiales)
 
@@ -163,6 +166,9 @@ function GenerarMundo.Generar()
 	Terreno.GenerarIsla()
 
 	Vegetacion.Generar(carpeta)
+
+	print("[MUNDO] Ciudades y aldeas...")
+	Pueblos.Generar(carpeta)
 
 	print("[MUNDO] Estructuras...")
 	local puntoInicio = colocarInicio()

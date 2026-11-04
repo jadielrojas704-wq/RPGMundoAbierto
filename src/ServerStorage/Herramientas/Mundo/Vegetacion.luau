@@ -586,7 +586,7 @@ local function sembrar(cantidad, intentosMaximos, condicion, crear)
 		intentos += 1
 		local x, z = n(-LIMITE, LIMITE), n(-LIMITE, LIMITE)
 		local d = Terreno.muestrear(x, z)
-		if d.altura > NIVEL_AGUA + 2 and d.camino < 0.15 and d.inicio < 0.3 and d.altar < 0.3 then
+		if d.altura > NIVEL_AGUA + 2 and d.camino < 0.15 and d.inicio < 0.3 and d.altar < 0.3 and d.pueblo < 0.05 then
 			local pendiente = Terreno.pendienteEn(x, z)
 			local y = if condicion(d, pendiente, x, z) then sueloReal(x, z) else nil
 			if y and y > NIVEL_AGUA + 1 then
@@ -1047,6 +1047,17 @@ end
 
 function Vegetacion.Roca(base, carpeta, material, color, escala)
 	return roca(base, carpeta, material, color, escala)
+end
+
+-- Para los pueblos (Pueblos.luau): palmeras, árboles y arbustos decorativos.
+-- Usan los mismos modelos realistas ya cargados en Vegetacion.Generar.
+function Vegetacion.Palmera(base, carpeta)
+	return palmera(base, carpeta)
+end
+
+function Vegetacion.Plantar(nombre, base, carpeta, escala)
+	local y = sueloReal(base.X, base.Z) or base.Y
+	return plantar(nombre, Vector3.new(base.X, y, base.Z), carpeta, nil, escala)
 end
 
 return Vegetacion

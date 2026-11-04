@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Regiones = require(ReplicatedStorage.Config.RegionesConfig)
+local PueblosConfig = require(ReplicatedStorage.Config.PueblosConfig)
 
 local Terreno = {}
 
@@ -59,7 +60,7 @@ local function caminoOesteZ(x)
 end
 
 -- Puntos a lo largo de cada camino (para poner puentes, etc.)
-function Terreno.PuntosCaminos(paso)
+local function puntosPrincipales(paso)
 	local caminos = { Norte = {}, Este = {}, Oeste = {} }
 	for z = INICIO.Y, ALTAR.Y, -paso do
 		table.insert(caminos.Norte, Vector2.new(caminoNorteX(z), z))
@@ -88,9 +89,189 @@ local function distanciaCaminos(x, z)
 	return mejor
 end
 
+-- ===== PUEBLOS: sitios llanos y caminos que llegan a ellos =====
+
+local REGION_DE_CULTURA = { Reino = "Bosque", Sol = "Desierto", Brujos = "Oscuro", Norte = "Montana" }
+local sitios = nil -- se calcula una sola vez (ver Terreno.SitiosPueblos)
+local ramales = {} -- caminos nuevos: { puntos = {Vector2...}, minimo = Vector2, maximo = Vector2 }
+
+-- Curva suave (Bézier) de A a B que se dobla un poco hacia un lado
+local function curva(a, b, doblez)
+	local medio = (a + b) / 2
+	local direccion = b - a
+	local lado = Vector2.new(-direccion.Y, direccion.X).Unit
+	local control = medio + lado * direccion.Magnitude * doblez
+	local puntos = {}
+	local pasos = math.max(4, math.floor(direccion.Magnitude / 25))
+	for i = 0, pasos do
+		local t = i / pasos
+		table.insert(puntos, a * (1 - t) ^ 2 + control * 2 * (1 - t) * t + b * t * t)
+	end
+	return puntos
+end
+
+local function distanciaASegmento(p, a, b)
+	local ab = b - a
+	local largo = ab:Dot(ab)
+	if largo < 1e-6 then
+		return (p - a).Magnitude
+	end
+	local t = math.clamp((p - a):Dot(ab) / largo, 0, 1)
+	return (p - (a + ab * t)).Magnitude
+end
+
+local function distanciaRamales(x, z)
+	local p = Vector2.new(x, z)
+	local mejor = math.huge
+	for _, ramal in ramales do
+		if x > ramal.minimo.X and x < ramal.maximo.X and z > ramal.minimo.Y and z < ramal.maximo.Y then
+			local puntos = ramal.puntos
+			for i = 1, #puntos - 1 do
+				mejor = math.min(mejor, distanciaASegmento(p, puntos[i], puntos[i + 1]))
+			end
+		end
+	end
+	return mejor
+end
+
+-- Busca, cerca de la pista de cada pueblo, el sitio más llano, seco y dentro de su región.
+-- Devuelve { [id] = { centro = Vector2, radio = número, altura = número } }
+function Terreno.SitiosPueblos()
+	if sitios then
+		return sitios
+	end
+	local elegidos = {}
+	local listaSitios = {}
+	for _, pueblo in PueblosConfig.PUEBLOS do
+		local mejor, mejorPuntos = nil, math.huge
+		local radio = pueblo.radio
+		local busca = radio * 1.4
+		local region = REGION_DE_CULTURA[pueblo.cultura]
+		for gx = -busca, busca, 16 do
+			for gz = -busca, busca, 16 do
+				if gx * gx + gz * gz <= busca * busca then
+					local c = pueblo.pista + Vector2.new(gx, gz)
+					local minimo, maximo, suma, cuenta, castigo = math.huge, -math.huge, 0, 0, 0
+					for anillo = 0, 2 do
+						local r = radio * anillo / 2
+						local vueltas = if anillo == 0 then 1 else 8
+						for k = 1, vueltas do
+							local angulo = k / vueltas * math.pi * 2
+							local px, pz = c.X + math.cos(angulo) * r, c.Y + math.sin(angulo) * r
+							local d = Terreno.muestrear(px, pz, true)
+							minimo = math.min(minimo, d.altura)
+							maximo = math.max(maximo, d.altura)
+							suma += d.altura
+							cuenta += 1
+							if d.rio > 0.05 or d.lago > 0.05 or d.oasis > 0.05 or d.pantano > 0.05 then
+								castigo += 400 -- nada de pueblos encima del agua
+							end
+							if d.altura < NIVEL_AGUA + 4 then
+								castigo += 400
+							end
+						end
+					end
+					local pesos = Regiones.Pesos(c.X, c.Y)
+					if (pesos[region] or 0) < 0.75 then
+						castigo += 600 -- que el pueblo quede dentro de su región
+					end
+					-- lejos del inicio, del altar y de otros pueblos
+					if (c - INICIO).Magnitude < radio + 90 or (c - ALTAR).Magnitude < radio + 80 then
+						castigo += 1000
+					end
+					for _, otro in listaSitios do
+						if (c - otro.centro).Magnitude < radio + otro.radio + 60 then
+							castigo += 1000
+						end
+					end
+					local puntos = (maximo - minimo) + castigo + (c - pueblo.pista).Magnitude * 0.03
+					if puntos < mejorPuntos then
+						mejorPuntos = puntos
+						mejor = { centro = c, radio = radio, altura = math.max(suma / cuenta, NIVEL_AGUA + 5) }
+					end
+				end
+			end
+		end
+		elegidos[pueblo.id] = mejor
+		table.insert(listaSitios, mejor)
+	end
+
+	-- Caminos: cada capital se une al camino principal más cercano;
+	-- cada aldea, a lo que tenga más cerca (camino principal o la capital de su región)
+	local principales = {}
+	for _, puntos in puntosPrincipales(8) do
+		for _, punto in puntos do
+			table.insert(principales, punto)
+		end
+	end
+	local capitales = {}
+	for _, pueblo in PueblosConfig.PUEBLOS do
+		if pueblo.tipo == "Capital" then
+			capitales[pueblo.cultura] = elegidos[pueblo.id]
+		end
+	end
+	for i, pueblo in PueblosConfig.PUEBLOS do
+		local sitio = elegidos[pueblo.id]
+		local destino, distancia = nil, math.huge
+		for _, punto in principales do
+			local dd = (punto - sitio.centro).Magnitude
+			if dd < distancia then
+				destino, distancia = punto, dd
+			end
+		end
+		local capital = capitales[pueblo.cultura]
+		if pueblo.tipo ~= "Capital" and capital then
+			local dd = (capital.centro - sitio.centro).Magnitude - capital.radio * 0.8
+			if dd < distancia then
+				destino = capital.centro + (sitio.centro - capital.centro).Unit * capital.radio * 0.8
+			end
+		end
+		if destino and (destino - sitio.centro).Magnitude > sitio.radio then
+			local doblez = (if i % 2 == 0 then 1 else -1) * 0.12
+			local puntos = curva(sitio.centro, destino, doblez)
+			local minimo, maximo = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
+			for _, punto in puntos do
+				minimo = Vector2.new(math.min(minimo.X, punto.X), math.min(minimo.Y, punto.Y))
+				maximo = Vector2.new(math.max(maximo.X, punto.X), math.max(maximo.Y, punto.Y))
+			end
+			table.insert(ramales, {
+				nombre = "Ramal_" .. pueblo.id,
+				puntos = puntos,
+				minimo = minimo - Vector2.new(12, 12),
+				maximo = maximo + Vector2.new(12, 12),
+			})
+			sitio.entrada = (destino - sitio.centro).Unit -- hacia dónde mira la puerta del pueblo
+		else
+			sitio.entrada = Vector2.new(0, 1)
+		end
+	end
+
+	sitios = elegidos
+	return sitios
+end
+
+-- Puntos a lo largo de todos los caminos, también los que llevan a los pueblos
+function Terreno.PuntosCaminos(paso)
+	local caminos = puntosPrincipales(paso)
+	Terreno.SitiosPueblos()
+	for _, ramal in ramales do
+		local lista = {}
+		for i = 1, #ramal.puntos - 1 do
+			local a, b = ramal.puntos[i], ramal.puntos[i + 1]
+			local pasos = math.max(1, math.floor((b - a).Magnitude / paso))
+			for k = 0, pasos - 1 do
+				table.insert(lista, a + (b - a) * (k / pasos))
+			end
+		end
+		caminos[ramal.nombre] = lista
+	end
+	return caminos
+end
+
 -- ===== MUESTREO: altura y zonas de cualquier punto =====
 
-function Terreno.muestrear(x, z)
+-- sinPueblos = true -> el terreno "natural", sin aplanar los pueblos (para buscar sitio)
+function Terreno.muestrear(x, z, sinPueblos)
 	local p = Regiones.Pesos(x, z)
 	local d = { bosque = p.Bosque, desierto = p.Desierto, oscuro = p.Oscuro, montana = p.Montana }
 
@@ -139,6 +320,10 @@ function Terreno.muestrear(x, z)
 
 	-- Caminos de tierra (se hunden un poquito, como un sendero gastado)
 	local distanciaCamino = distanciaCaminos(x, z)
+	if not sinPueblos then
+		Terreno.SitiosPueblos()
+		distanciaCamino = math.min(distanciaCamino, distanciaRamales(x, z))
+	end
 	d.camino = 1 - suave(3, 7, distanciaCamino)
 	h -= d.camino * 0.6
 
@@ -147,6 +332,22 @@ function Terreno.muestrear(x, z)
 	h += (40 - h) * d.inicio
 	d.altar = 1 - suave(30, 70, (Vector2.new(x, z) - ALTAR).Magnitude)
 	h += (62 - h) * d.altar
+
+	-- Pueblos: el terreno se aplana suavemente alrededor de cada uno
+	d.pueblo = 0 -- 1 dentro del pueblo (sin árboles), 0 lejos
+	d.dentroPueblo = 0
+	if not sinPueblos then
+		for _, sitio in Terreno.SitiosPueblos() do
+			local distancia = (Vector2.new(x, z) - sitio.centro).Magnitude
+			if distancia < sitio.radio + 60 then
+				local irregular = ruido(x, z, 2, 30, SEMILLA + 40) * 8
+				local peso = 1 - suave(sitio.radio, sitio.radio + 45, distancia + irregular)
+				h += (sitio.altura - h) * peso
+				d.pueblo = math.max(d.pueblo, 1 - suave(sitio.radio + 8, sitio.radio + 25, distancia))
+				d.dentroPueblo = math.max(d.dentroPueblo, 1 - suave(sitio.radio * 0.9, sitio.radio, distancia))
+			end
+		end
+	end
 
 	d.altura = math.clamp(h, 6, ALTURA_MAX - 6)
 	d.manchas = ruido(x, z, 2, 70, SEMILLA + 13)
