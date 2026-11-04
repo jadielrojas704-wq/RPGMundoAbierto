@@ -513,6 +513,11 @@ function EfectoRodar.Reproducir(personaje, direccion, tipo)
 	if not raiz then
 		return
 	end
+	-- El motor de combate (Animador) suelta el cuerpo mientras dura la esquiva
+	local okAnimador, Animador = pcall(require, ReplicatedStorage:WaitForChild("Combate"):WaitForChild("Animador"))
+	if okAnimador then
+		Animador.Soltar(personaje)
+	end
 	local raizArt, articulaciones = buscarArticulaciones(personaje)
 	if not raizArt then
 		warn("[VOLTERETA] No encontré la articulación principal del personaje")
@@ -523,6 +528,7 @@ function EfectoRodar.Reproducir(personaje, direccion, tipo)
 		print("[VOLTERETA] Tipo de articulaciones:", raizArt.tipo)
 	end
 	rodando[personaje] = true
+	personaje:SetAttribute("AnimacionExterna", true)
 
 	local duracion = Tipos[tipo].DURACION
 	local animar = Animaciones[tipo]
@@ -576,6 +582,7 @@ function EfectoRodar.Reproducir(personaje, direccion, tipo)
 			apagarRastro()
 		end
 		rodando[personaje] = nil
+		personaje:SetAttribute("AnimacionExterna", nil)
 		if raiz.Parent and RESPIRA_AL_FINAL[tipo] and math.random() < Sonidos.PROBABILIDAD_RESPIRACION then
 			reproducirSonido(raiz, elegir(Sonidos.RESPIRACION), Sonidos.VOLUMEN_RESPIRACION)
 		end

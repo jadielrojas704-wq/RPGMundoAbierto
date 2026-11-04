@@ -481,6 +481,19 @@ UserInputService.InputBegan:Connect(function(entrada, procesado)
 	end
 end)
 
+-- Los botones de hablar usan la tecla de "Interactuar" del jugador (de fábrica, G)
+local Controles = require(ReplicatedStorage:WaitForChild("Combate"):WaitForChild("Controles"))
+local function teclaHablar(boton)
+	local nombre = Controles.TeclaDe("Interactuar")
+	local ok, tecla = pcall(function()
+		return Enum.KeyCode[nombre]
+	end)
+	if ok and tecla and boton.KeyboardKeyCode ~= tecla then
+		boton.KeyboardKeyCode = tecla
+	end
+end
+ProximityPromptService.PromptShown:Connect(teclaHablar)
+
 ProximityPromptService.PromptTriggered:Connect(function(boton)
 	local npc = boton:FindFirstAncestorWhichIsA("Model")
 	if npc and npc:GetAttribute("NPC") then

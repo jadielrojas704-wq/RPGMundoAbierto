@@ -25,7 +25,10 @@ local Formulas = require(ReplicatedStorage.Progresion.Formulas)
 local DatosServicio = require(script.Parent.DatosServicio)
 local EstaminaServicio = require(script.Parent.Parent.Combate.EstaminaServicio)
 
+local ControlesConfig = require(ReplicatedStorage.Config.ControlesConfig)
+
 local RemoteRepartir = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("RepartirPuntos")
+local RemoteTeclas = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("GuardarTeclas")
 
 local PersonajeServicio = {}
 
@@ -214,6 +217,28 @@ local function alRepartir(jugador, reparto)
 	end
 end
 
+-- ===== Teclas del jugador (Menú M > Ajustes) =====
+
+local ultimoTeclas = {}
+local function alGuardarTeclas(jugador, teclas)
+	local ahora = os.clock()
+	if ahora - (ultimoTeclas[jugador] or 0) < 0.5 or type(teclas) ~= "table" then
+		return
+	end
+	ultimoTeclas[jugador] = ahora
+	local limpio, cuantas = {}, 0
+	for accion, nombre in teclas do
+		cuantas += 1
+		if cuantas > 30 or not ControlesConfig.EsValida(accion, nombre) then
+			return -- algo raro: se ignora todo
+		end
+		limpio[accion] = nombre
+	end
+	DatosServicio.Modificar(jugador, function(d)
+		d.Ajustes.Teclas = limpio
+	end, true)
+end
+
 -- ===== Ubicación guardada =====
 
 local function posicionValida(p)
@@ -314,9 +339,11 @@ function PersonajeServicio.Iniciar()
 	Players.PlayerRemoving:Connect(function(jugador)
 		yaColocado[jugador] = nil
 		ultimoReparto[jugador] = nil
+		ultimoTeclas[jugador] = nil
 	end)
 
 	RemoteRepartir.OnServerEvent:Connect(alRepartir)
+	RemoteTeclas.OnServerEvent:Connect(alGuardarTeclas)
 
 	-- Un solo bucle: regenera el maná de todos y apunta la ubicación cada cierto tiempo
 	task.spawn(function()

@@ -355,7 +355,7 @@ function NPCs.Crear(padre, datos)
 	boton.Name = "Hablar"
 	boton.ActionText = if datos.tienda then "Hablar / Tienda" else "Hablar"
 	boton.ObjectText = datos.nombre .. " · " .. datos.titulo
-	boton.KeyboardKeyCode = Enum.KeyCode.E
+	boton.KeyboardKeyCode = Enum.KeyCode.G -- la E es para las habilidades
 	boton.MaxActivationDistance = 10
 	boton.HoldDuration = 0
 	boton.RequiresLineOfSight = false

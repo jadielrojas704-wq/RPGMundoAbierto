@@ -37,6 +37,9 @@ local function aplicar(jugador, corriendo)
 	if humanoide then
 		-- SPD (atributo "MultVelocidad", lo pone PersonajeServicio) hace andar y correr más rápido
 		local multiplicador = jugador:GetAttribute("MultVelocidad") or 1
+		if personaje:GetAttribute("Atacando") then
+			multiplicador *= 0.3 -- mientras golpeas casi no te mueves (lo marca CombateServicio)
+		end
 		humanoide.WalkSpeed = (if corriendo then Config.VELOCIDAD_CORRER else Config.VELOCIDAD_CAMINAR) * multiplicador
 		personaje:SetAttribute("Corriendo", corriendo)
 	end
@@ -63,13 +66,23 @@ function CorrerServicio.Iniciar()
 				aplicar(jugador, e.corriendo)
 			end
 		end)
-		jugador.CharacterAdded:Connect(function()
+		local function alPersonaje(personaje)
 			local e = estado[jugador]
 			if e then
 				e.quiere, e.agotado = false, false
 				task.defer(aplicar, jugador, false)
 			end
-		end)
+			personaje:GetAttributeChangedSignal("Atacando"):Connect(function()
+				local actual = estado[jugador]
+				if actual then
+					aplicar(jugador, actual.corriendo)
+				end
+			end)
+		end
+		jugador.CharacterAdded:Connect(alPersonaje)
+		if jugador.Character then
+			alPersonaje(jugador.Character)
+		end
 	end
 	Players.PlayerAdded:Connect(alEntrar)
 	for _, jugador in Players:GetPlayers() do

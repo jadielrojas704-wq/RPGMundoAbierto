@@ -728,6 +728,12 @@ local function registrar(npc)
 		reserva = npc:GetPivot().Position, -- el sitio que ocupa (o al que va)
 	}
 	datos.pistas = cargarAnimaciones(npc)
+	-- Hablar con G (la E queda para las habilidades). Cada jugador puede cambiarla en su menú.
+	for _, boton in npc:GetDescendants() do
+		if boton:IsA("ProximityPrompt") then
+			boton.KeyboardKeyCode = Enum.KeyCode.G
+		end
+	end
 	estado[npc] = datos
 	anim(datos, "Quieto", rng:NextNumber(0.85, 1.1))
 	if datos.pistas.Quieto then

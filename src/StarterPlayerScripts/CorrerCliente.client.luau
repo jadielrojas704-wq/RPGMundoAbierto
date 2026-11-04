@@ -14,6 +14,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Config.CombateConfig).Correr
+local Controles = require(ReplicatedStorage:WaitForChild("Combate"):WaitForChild("Controles"))
 local RemotoCorrer = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Correr")
 
 local jugador = Players.LocalPlayer
@@ -25,10 +26,8 @@ local mandoActivo = false
 local ultimoToqueW = 0
 local enviado = false -- último valor mandado al servidor
 
+-- La tecla de correr la elige el jugador (de fábrica, Ctrl); Config.TECLAS queda de reserva
 local esTeclaCorrer = {}
-for _, tecla in Config.TECLAS do
-	esTeclaCorrer[tecla] = true
-end
 
 local function actualizar()
 	local quiere = ctrlPulsado or dobleW or mandoActivo
@@ -43,7 +42,7 @@ UserInputService.InputBegan:Connect(function(entrada, procesado)
 		return -- escribiendo en el chat o en una ventana
 	end
 	local tecla = entrada.KeyCode
-	if esTeclaCorrer[tecla] then
+	if esTeclaCorrer[tecla] or Controles.Es("Correr", entrada) then
 		ctrlPulsado = true
 	elseif tecla == Enum.KeyCode.W then
 		local ahora = os.clock()
@@ -59,15 +58,8 @@ end)
 
 UserInputService.InputEnded:Connect(function(entrada)
 	local tecla = entrada.KeyCode
-	if esTeclaCorrer[tecla] then
-		-- Solo paramos si ya no queda ninguna tecla Ctrl pulsada
-		local alguna = false
-		for t in esTeclaCorrer do
-			if UserInputService:IsKeyDown(t) then
-				alguna = true
-			end
-		end
-		ctrlPulsado = alguna
+	if esTeclaCorrer[tecla] or Controles.Es("Correr", entrada) then
+		ctrlPulsado = false
 	elseif tecla == Enum.KeyCode.W then
 		dobleW = false
 	end

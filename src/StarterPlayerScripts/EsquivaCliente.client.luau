@@ -5,9 +5,10 @@
 -- las decide el servidor (ServerScriptService/Combate/EsquivaServicio).
 --
 -- Tipos de esquiva (según hacia dónde caminas respecto a la cámara):
---   W o S + Q  -> Rodar (voltereta hacia donde caminas)
---   A o D + Q  -> Lateral (voltereta lateral acrobática, sigues mirando al frente)
---   Solo Q     -> PasoAtras (salto corto hacia atrás)
+--   W o S + Shift  -> Rodar (voltereta hacia donde caminas)
+--   A o D + Shift  -> Lateral (voltereta lateral acrobática, sigues mirando al frente)
+--   Solo Shift     -> PasoAtras (salto corto hacia atrás)
+-- (Shift es la tecla de fábrica; cada jugador puede cambiarla en Menú M > Ajustes)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -17,6 +18,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Config.CombateConfig).Esquiva
+local Controles = require(ReplicatedStorage:WaitForChild("Combate"):WaitForChild("Controles"))
 local EfectoRodar = require(ReplicatedStorage:WaitForChild("Efectos"):WaitForChild("EfectoRodar"))
 local Remotos = ReplicatedStorage:WaitForChild("Remotes")
 local RemotoEsquivar = Remotos:WaitForChild("Esquivar")
@@ -158,7 +160,8 @@ UserInputService.InputBegan:Connect(function(input, procesadoPorJuego)
 	if procesadoPorJuego then
 		return -- por ejemplo, si está escribiendo en el chat
 	end
-	if input.KeyCode == Config.TECLA or input.KeyCode == Config.BOTON_MANDO then
+	-- La tecla sale de los controles del jugador (de fábrica: Shift)
+	if Controles.Es("Esquiva", input) or input.KeyCode == Config.BOTON_MANDO then
 		esquivar()
 	end
 end)

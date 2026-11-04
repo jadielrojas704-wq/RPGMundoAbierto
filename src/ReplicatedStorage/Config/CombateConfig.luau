@@ -15,7 +15,7 @@ CombateConfig.Esquiva = {
 	COSTO_ESTAMINA = 20,
 	INVULNERABILIDAD = 0.35, -- segundos en los que no recibes daño (i-frames)
 	ENFRIAMIENTO = 0.75, -- tiempo mínimo entre esquivas
-	TECLA = Enum.KeyCode.Q,
+	TECLA = Enum.KeyCode.LeftShift, -- de fábrica; el jugador la cambia en Menú M > Ajustes (ControlesConfig)
 	BOTON_MANDO = Enum.KeyCode.ButtonB,
 
 	-- Tipos de esquiva:
