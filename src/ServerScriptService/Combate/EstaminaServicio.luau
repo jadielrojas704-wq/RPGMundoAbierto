@@ -10,7 +10,9 @@ local Config = require(ReplicatedStorage.Config.CombateConfig).Estamina
 
 local EstaminaServicio = {}
 
--- datos[jugador] = { actual = número, ultimoGasto = tiempo }
+-- datos[jugador] = { actual = número, ultimoGasto = tiempo, maxima = número, regen = multiplicador }
+-- La máxima y la recuperación dependen de los atributos (VIT y SPD): las fija
+-- ServerScriptService/Progresion/PersonajeServicio con EstaminaServicio.FijarMaxima.
 local datos = {}
 
 local function publicar(jugador, d)
@@ -22,12 +24,12 @@ local function rellenar(jugador)
 	if not d then
 		return
 	end
-	d.actual = Config.MAXIMA
+	d.actual = d.maxima
 	publicar(jugador, d)
 end
 
 local function alEntrar(jugador)
-	datos[jugador] = { actual = Config.MAXIMA, ultimoGasto = 0 }
+	datos[jugador] = { actual = Config.MAXIMA, ultimoGasto = 0, maxima = Config.MAXIMA, regen = 1 }
 	jugador:SetAttribute("EstaminaMax", Config.MAXIMA)
 	publicar(jugador, datos[jugador])
 
@@ -41,6 +43,19 @@ end
 function EstaminaServicio.Obtener(jugador)
 	local d = datos[jugador]
 	return d and d.actual or 0
+end
+
+-- Cambia la estamina máxima y la velocidad de recuperación de un jugador
+function EstaminaServicio.FijarMaxima(jugador, maxima, regen)
+	local d = datos[jugador]
+	if not d then
+		return
+	end
+	d.maxima = math.max(1, maxima)
+	d.regen = regen or 1
+	d.actual = math.min(d.actual, d.maxima)
+	jugador:SetAttribute("EstaminaMax", d.maxima)
+	publicar(jugador, d)
 end
 
 -- Intenta gastar estamina. Devuelve true si había suficiente.
@@ -71,8 +86,8 @@ function EstaminaServicio.Iniciar()
 			local ahora = os.clock()
 			for jugador, d in datos do
 				local puedeRecuperar = ahora - d.ultimoGasto >= Config.RETRASO_REGEN
-				if d.actual < Config.MAXIMA and puedeRecuperar then
-					d.actual = math.min(Config.MAXIMA, d.actual + Config.REGEN_POR_SEGUNDO * dt)
+				if d.actual < d.maxima and puedeRecuperar then
+					d.actual = math.min(d.maxima, d.actual + Config.REGEN_POR_SEGUNDO * d.regen * dt)
 					publicar(jugador, d)
 				end
 			end

@@ -22,7 +22,7 @@ TiendasConfig.TIPOS = {
 	Establo = { nombre = "Establo", descripcion = "Animales y monturas" },
 }
 
--- arma = una de las 7 armas del juego (ver Config/Constantes)
+-- arma = una de las armas del juego (ver Config/Constantes)
 local function arma(nombre, tipo, precio, descripcion)
 	return { nombre = nombre, categoria = "Arma", arma = tipo, precio = precio, descripcion = descripcion }
 end
