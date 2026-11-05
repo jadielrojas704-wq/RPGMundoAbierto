@@ -12,6 +12,7 @@ local Workspace = game:GetService("Workspace")
 
 local Estilo = require(ReplicatedStorage:WaitForChild("Interfaz"):WaitForChild("Estilo"))
 local Pergamino = require(ReplicatedStorage.Interfaz:WaitForChild("Pergamino"))
+local Voz = require(ReplicatedStorage.Interfaz:WaitForChild("Voz"))
 local HistoriaConfig = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("HistoriaConfig"))
 local Remoto = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Historia")
 
@@ -64,7 +65,7 @@ jugador:GetAttributeChangedSignal("EnCinematica"):Connect(visible)
 -- ===== Rastreador de la misión (arriba a la derecha) =====
 local rastreador = Estilo.Marco(pantalla, {
 	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -18, 0, 150),
+	Position = UDim2.new(1, -18, 0, 384), -- debajo del minimapa
 	Size = UDim2.fromOffset(300, 92),
 	BackgroundTransparency = 1,
 })
@@ -153,6 +154,21 @@ local distanciaMarca = Estilo.Texto(marca, {
 
 local estadoMision = nil
 
+-- ===== Rastrear la misión (tecla T de fábrica): marca en el mundo y en el minimapa =====
+local Controles = require(ReplicatedStorage:WaitForChild("Combate"):WaitForChild("Controles"))
+local rastreando = true
+jugador:SetAttribute("Rastreando", true)
+UserInputService.InputBegan:Connect(function(entrada, procesado)
+	if procesado or jugador:GetAttribute("EnMenu") or jugador:GetAttribute("EnCinematica") then
+		return
+	end
+	if Controles.Es("Rastrear", entrada) then
+		rastreando = not rastreando
+		jugador:SetAttribute("Rastreando", rastreando)
+		sonido("rbxasset://sounds/electronicpingshort.wav", 0.35)
+	end
+end)
+
 local function mostrarMision(info)
 	estadoMision = info
 	if not info then
@@ -171,6 +187,8 @@ local function mostrarMision(info)
 	if info.destino then
 		ancla.Position = info.destino + Vector3.new(0, 7, 0)
 	end
+	-- el minimapa lee aquí dónde está el objetivo
+	jugador:SetAttribute("DestinoMision", if info.fin then nil else info.destino)
 end
 
 -- ===== Avisos de misión (arriba en el centro) =====
@@ -296,6 +314,7 @@ local escribiendo = false
 local function mostrarLinea()
 	local linea = lineasActuales and lineasActuales[lineaActual]
 	if not linea then
+		Voz.Callar("dialogo")
 		caja.Visible = false
 		lineasActuales = nil
 		if #cola > 0 then
@@ -310,6 +329,8 @@ local function mostrarLinea()
 	textoDialogo.Text = linea
 	textoDialogo.MaxVisibleGraphemes = 0
 	escribiendo = true
+	-- cada personaje con su voz (el Custodio, de momento, es el que habla por el amuleto)
+	task.spawn(Voz.Decir, linea, Voz.PERFILES.Eldren, "dialogo")
 	sonido("rbxasset://sounds/clickfast.wav", 0.15)
 	task.spawn(function()
 		local inicio = os.clock()
@@ -504,9 +525,11 @@ RunService.RenderStepped:Connect(function(dt)
 	local raiz = personaje and personaje:FindFirstChild("HumanoidRootPart")
 	if estadoMision and estadoMision.destino and raiz and not estadoMision.fin then
 		local distancia = (estadoMision.destino - raiz.Position).Magnitude
-		marca.Enabled = distancia > 14
+		marca.Enabled = distancia > 14 and rastreando and not jugador:GetAttribute("EnCinematica")
 		distanciaMarca.Text = string.format("%d m", math.floor(distancia / 3.57))
-		textoDistancia.Text = string.format("a %d m", math.floor(distancia / 3.57))
+		textoDistancia.Text = if rastreando
+			then string.format("a %d m", math.floor(distancia / 3.57))
+			else Controles.Nombre("Rastrear") .. ": rastrear"
 		romboMarca.Rotation = 45 + math.sin(os.clock() * 3) * 10
 	else
 		marca.Enabled = false

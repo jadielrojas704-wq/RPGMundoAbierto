@@ -70,6 +70,7 @@ local function estado(jugador)
 		Apariencia = table.clone(d.Apariencia),
 		Creado = d.Creado,
 		PrologoVisto = d.Historia and d.Historia.PrologoVisto,
+		Mision = d.Historia and d.Historia.Mision,
 	}
 end
 

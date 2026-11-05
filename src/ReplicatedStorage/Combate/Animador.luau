@@ -12,6 +12,11 @@
 --   anim:Postura(Poses.GUARDIA, 0.25)              -- entra en guardia en 0.25 s
 --   anim:Reproducir(Animaciones.Jab, { velocidad = 1.1, alEvento = function(nombre) end })
 --   anim:Congelar(0.07)                            -- congelado de impacto (hitstop)
+--   anim:Locomocion(true)                          -- capa de movimiento (solo tu personaje):
+--       el cuerpo se inclina al correr y al girar, y la cabeza mira hacia donde apunta la cámara
+--
+-- Mientras te mueves, la postura deja libres las PIERNAS (las mueve la animación de andar o
+-- correr) y solo mantiene el tronco y los brazos en guardia: así se ve el paso y no "patina".
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -38,6 +43,18 @@ local ARTICULACIONES = {
 }
 
 local instancias = {} -- [personaje] = Animador
+
+-- Articulaciones de las piernas: al moverse, la postura se aparta de ellas
+local PIERNAS = {
+	Root = 0.75,
+	LeftHip = 1,
+	RightHip = 1,
+	LeftKnee = 1,
+	RightKnee = 1,
+	LeftAnkle = 1,
+	RightAnkle = 1,
+	Waist = 0.35,
+}
 
 -- ===== Curvas de suavizado =====
 local CURVAS = {
@@ -134,6 +151,12 @@ function Animador.De(personaje)
 	self.temblor = 0 -- temblor del cuerpo (para cargar golpes)
 	self.tocado = false
 	self.suave = {} -- última pose aplicada de cada articulación (para el muelle)
+	self.movimiento = 0 -- 0 quieto, 1 corriendo (suavizado)
+	self.locomocion = false
+	self.inclinacion = 0 -- hacia delante (radianes)
+	self.ladeo = 0 -- hacia los lados al girar
+	self.mirada = CFrame.identity -- giro de la cabeza
+	self.ultimoGiro = nil
 	instancias[personaje] = self
 	return self
 end
@@ -176,6 +199,10 @@ end
 
 function Animador:Ocupado()
 	return self.accion ~= nil and not self.accion.terminando
+end
+
+function Animador:Locomocion(activa)
+	self.locomocion = activa == true
 end
 
 function Animador:Congelar(segundos)
@@ -266,7 +293,47 @@ function Animador:_actualizar(dt)
 	end
 
 	local pesoAccion = accion and accion.peso or 0
-	if self.pesoPostura <= 0.001 and pesoAccion <= 0.001 and self.temblor <= 0 then
+
+	-- ===== Capa de movimiento: cuánto te mueves, inclinación y mirada =====
+	local raiz = personaje:FindFirstChild("HumanoidRootPart")
+	local humanoide = personaje:FindFirstChildOfClass("Humanoid")
+	local mover = 0
+	local inclinacionObjetivo, ladeoObjetivo, miradaObjetivo = 0, 0, CFrame.identity
+	if raiz and humanoide then
+		local v = raiz.AssemblyLinearVelocity
+		local plano = Vector3.new(v.X, 0, v.Z)
+		local rapidez = plano.Magnitude
+		mover = math.clamp((rapidez - 2) / 12, 0, 1)
+		if self.locomocion and humanoide.FloorMaterial ~= Enum.Material.Air then
+			local adelante = raiz.CFrame.LookVector:Dot(plano)
+			-- al correr de verdad (más de 18) el cuerpo se echa hacia delante
+			inclinacionObjetivo = math.clamp((adelante - 10) / 16, 0, 1) * math.rad(10)
+			-- al girar, el cuerpo se ladea hacia el lado del giro (como al correr de verdad)
+			local _, giroY = raiz.CFrame:ToEulerAnglesYXZ()
+			if self.ultimoGiro and dt > 0 then
+				local cambio = math.atan2(math.sin(giroY - self.ultimoGiro), math.cos(giroY - self.ultimoGiro))
+				ladeoObjetivo = math.clamp(cambio / dt * 0.05 * mover, -math.rad(9), math.rad(9))
+			end
+			self.ultimoGiro = giroY
+		end
+		-- la cabeza mira hacia donde apunta la cámara (sin pasarse)
+		if self.locomocion and not accion and personaje == Players.LocalPlayer.Character then
+			local camara = workspace.CurrentCamera
+			local local_ = raiz.CFrame:VectorToObjectSpace(camara.CFrame.LookVector)
+			local yaw = math.clamp(math.atan2(-local_.X, -local_.Z), -math.rad(55), math.rad(55))
+			local pitch = math.clamp(math.asin(math.clamp(local_.Y, -1, 1)), -math.rad(25), math.rad(30))
+			miradaObjetivo = CFrame.Angles(pitch * 0.6, yaw * 0.7, 0)
+		end
+	end
+	local k = 1 - math.exp(-8 * dt)
+	self.movimiento += (mover - self.movimiento) * k
+	self.inclinacion += (inclinacionObjetivo - self.inclinacion) * k
+	self.ladeo += (ladeoObjetivo - self.ladeo) * (1 - math.exp(-5 * dt))
+	self.mirada = self.mirada:Lerp(miradaObjetivo, 1 - math.exp(-6 * dt))
+	local capaMovimiento = self.locomocion
+		and (math.abs(self.inclinacion) > 0.002 or math.abs(self.ladeo) > 0.002 or self.mirada ~= CFrame.identity)
+
+	if self.pesoPostura <= 0.001 and pesoAccion <= 0.001 and self.temblor <= 0 and not capaMovimiento then
 		if self.tocado then
 			-- todo en reposo: dejamos las articulaciones como estaban
 			for _, articulacion in self.articulaciones do
@@ -286,7 +353,9 @@ function Animador:_actualizar(dt)
 	end
 
 	for nombre, articulacion in self.articulaciones do
-		local base = CFrame.identity:Lerp(giro(self.postura, nombre), self.pesoPostura)
+		-- al moverse, las piernas quedan libres para la animación de andar/correr
+		local libre = (PIERNAS[nombre] or 0) * self.movimiento * 0.9
+		local base = CFrame.identity:Lerp(giro(self.postura, nombre), self.pesoPostura * (1 - libre))
 		local final = base
 		if accion then
 			local g = giro(poseA, nombre)
@@ -307,6 +376,16 @@ function Animador:_actualizar(dt)
 		self.suave[nombre] = final
 		if temblor and nombre == "Root" then
 			final = final * temblor
+		end
+		-- capa de movimiento (va encima de todo, sin muelle: ya va suavizada)
+		if capaMovimiento then
+			if nombre == "Root" then
+				final = final * CFrame.Angles(-self.inclinacion, 0, self.ladeo)
+			elseif nombre == "Neck" then
+				final = final * self.mirada
+			elseif nombre == "Waist" then
+				final = final * CFrame.Angles(self.inclinacion * 0.3, 0, -self.ladeo * 0.4)
+			end
 		end
 		articulacion.poner(articulacion.original * final)
 	end

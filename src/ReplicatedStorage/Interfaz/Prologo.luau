@@ -12,6 +12,7 @@ local InicioConfig = require(ReplicatedStorage.Config.InicioConfig)
 local RegionesConfig = require(ReplicatedStorage.Config.RegionesConfig)
 local SonidosConfig = require(ReplicatedStorage.Config.SonidosConfig)
 local Cinematica = require(script.Parent.Cinematica)
+local Voz = require(script.Parent.Voz)
 
 local Prologo = {}
 
@@ -85,7 +86,7 @@ local function tomas()
 				mirar(Vector3.new(60, picos.Y + 120, -420), picos),
 				60,
 				nil,
-				"Temblor"
+				"Dragon" -- la montaña tiembla y el dragón oculto ruge unos segundos
 		end,
 		Capital = function()
 			return mirar(capital + Vector3.new(260, 140, 160), capital + Vector3.new(0, 15, 0)),
@@ -93,6 +94,17 @@ local function tomas()
 				60
 		end,
 		Inicio = function()
+			-- la cabaña de Eldren, de noche, con luz en la ventana: ahí despertará el jugador
+			local historia = Workspace:FindFirstChild("Historia")
+			local cabana = historia and historia:FindFirstChild("CabanaEldren")
+			local centro = cabana and cabana:GetAttribute("Centro")
+			if typeof(centro) == "Vector3" then
+				return mirar(centro + Vector3.new(-40, 34, -62), centro + Vector3.new(0, 4, 0)),
+					mirar(centro + Vector3.new(-10, 9, -26), centro + Vector3.new(0, 5, 0)),
+					55,
+					48,
+					"Temblor"
+			end
 			return mirar(inicio + Vector3.new(30, 60, 70), inicio),
 				mirar(inicio + Vector3.new(6, 6, 14), inicio + Vector3.new(0, 2, 0)),
 				60,
@@ -133,7 +145,8 @@ function Prologo.Reproducir()
 			titulo = string.upper(InicioConfig.NOMBRE_JUEGO),
 			subtitulo = HistoriaConfig.ACTO,
 			musica = SonidosConfig.MUSICA.Prologo,
-			volumen = 0.65,
+			volumen = 0.38,
+			narrador = Voz.PERFILES.Narrador, -- la voz grave que cuenta la historia
 		}
 	)
 end

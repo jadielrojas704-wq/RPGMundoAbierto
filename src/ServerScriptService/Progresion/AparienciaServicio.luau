@@ -87,6 +87,20 @@ function AparienciaServicio.Descripcion(apariencia, humano)
 	pcall(function()
 		descripcion:SetAccessories(capas, false)
 	end)
+
+	-- animaciones de movimiento fluidas (las mismas para todos) y gestos de descanso
+	for propiedad, id in AparienciaConfig.ANIMACIONES do
+		descripcion[propiedad] = id
+	end
+	pcall(function()
+		local emotes, puestos = {}, {}
+		for nombre, id in AparienciaConfig.DESCANSO do
+			emotes[nombre] = { id }
+			table.insert(puestos, { Name = nombre, Slot = #puestos + 1 })
+		end
+		descripcion:SetEmotes(emotes)
+		descripcion:SetEquippedEmotes(puestos)
+	end)
 	return descripcion
 end
 

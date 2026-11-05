@@ -132,28 +132,22 @@ HistoriaConfig.ACTO = "Acto I · El sello se agrieta"
 HistoriaConfig.MISIONES = {
 	{
 		id = "Despertar",
-		titulo = "Un despertar extraño",
-		descripcion = "Te despiertas en el Valle de Aurelia sin recordar cómo llegaste. Un anciano te observa.",
-		objetivo = { tipo = "Hablar", objetivo = "Custodio", texto = "Habla con el Custodio Eldren" },
+		titulo = "Dos días de sueño",
+		descripcion = "Despiertas en una cabaña que no conoces. Un anciano vela junto al fuego.",
+		objetivo = { tipo = "Despertar", texto = "Despierta" },
 		recompensa = { Exp = 60 },
-		dialogo = {
-			"Por fin despiertas. Llevas dos días dormido junto al camino.",
-			"Mi nombre es Eldren. Mi familia ha custodiado un secreto durante mil generaciones.",
-			"Esta noche el cielo tembló. Lo sentiste, ¿verdad? El sello se está rompiendo.",
-			"Toma este amuleto. Con él podré hablarte estés donde estés.",
-			"Antes de contarte más, necesito saber si puedes defenderte. Esos muñecos te servirán.",
-		},
+		-- lo que se dice aquí sale en la cinemática del despertar (DESPERTAR, más abajo)
 	},
 	{
 		id = "Ritual",
 		titulo = "El viejo ritual",
-		descripcion = "Eldren quiere ver cómo peleas antes de confiarte su secreto.",
-		objetivo = { tipo = "Golpes", cantidad = 15, texto = "Golpea a los muñecos de entrenamiento" },
+		descripcion = "Eldren quiere ver si aún sabes pelear antes de contarte nada más.",
+		objetivo = { tipo = "Golpes", cantidad = 15, texto = "Golpea a los muñecos de paja frente a la cabaña" },
 		recompensa = { Exp = 120, Oro = 25 },
 		dialogo = {
-			"Nada mal. Tus puños tienen algo... una energía que no había visto en años.",
-			"Escucha. Hace miles de años, seis Guardianes protegían el mundo. Uno de ellos nos traicionó.",
-			"Al este del camino hay un santuario de Sylvaris, la Guardiana de la Vida. Lee lo que dejó escrito.",
+			"Nada mal. Tus puños guardan una energía que no veía desde hace muchos años.",
+			"Escucha bien. Hace miles de años, seis Guardianes protegían este mundo. Uno de ellos nos traicionó.",
+			"Al noreste, siguiendo el arroyo, hay un santuario de Sylvaris, la Guardiana de la Vida. Lee lo que dejó escrito en la piedra.",
 		},
 	},
 	{
@@ -167,19 +161,19 @@ HistoriaConfig.MISIONES = {
 		},
 		recompensa = { Exp = 180, GirosAfinidad = 1 },
 		dialogo = {
-			"Así que es verdad... los Guardianes dejaron mensajes.",
-			"Si el sello se rompe, lo primero que notaremos serán los rumores. Ve a Valdoria, la capital, y escucha a su gente.",
+			"Así que es verdad... los Guardianes dejaron mensajes para quien supiera buscarlos.",
+			"Si el sello se rompe, lo primero que notaremos serán los rumores. Ve al norte, a Valdoria, la capital, y escucha a su gente.",
 		},
 	},
 	{
 		id = "Rumores",
 		titulo = "Rumores en la capital",
 		descripcion = "En Valdoria se habla de luces extrañas en el norte.",
-		objetivo = { tipo = "Visitar", pueblo = "Valdoria", texto = "Viaja a Valdoria" },
+		objetivo = { tipo = "Visitar", pueblo = "Valdoria", texto = "Viaja a Valdoria, la capital" },
 		recompensa = { Exp = 150, Oro = 40 },
 		dialogo = {
-			"Luz en el Altar del Ascenso... eso es justo lo que temía.",
-			"El altar está al norte, al pie de los Picos del Velo. Allí duerme el traidor. Ve y mira la piedra.",
+			"Luz morada sobre el Altar del Ascenso... es justo lo que temía.",
+			"El altar está más al norte, al pie de los Picos del Velo. Allí duerme el traidor. Ve y examina la piedra.",
 		},
 	},
 	{
@@ -194,7 +188,7 @@ HistoriaConfig.MISIONES = {
 		recompensa = { Exp = 300, GirosRaza = 1 },
 		dialogo = {
 			"Aetherion... el Guardián del Tiempo. El más sabio de todos. Y el que nos condenó.",
-			"Los otros Guardianes dejaron santuarios en cada tierra. Encuéntralos: el de Ignar en las dunas, el de Morvak en el bosque sombrío y el de Lunaria en los picos.",
+			"Los otros Guardianes dejaron santuarios en cada tierra: Ignar en las dunas del este, Morvak en el bosque sombrío del oeste y Lunaria en lo alto de los picos.",
 			"Si alguien puede volver a cerrar el sello, será quien entienda lo que pasó.",
 		},
 	},
@@ -215,6 +209,44 @@ HistoriaConfig.MISIONES = {
 		},
 	},
 }
+
+-- ===== Cinemática del DESPERTAR (la primera vez, justo después del prólogo) =====
+-- toma = qué enseña la cámara (la programa ReplicatedStorage/Interfaz/Despertar)
+-- quien = "Eldren" (habla con su voz) o nil (sin voz)
+HistoriaConfig.DESPERTAR = {
+	cartel = "DOS DÍAS DESPUÉS",
+	lugar = "Cabaña de Eldren · Valle de Aurelia",
+	lineas = {
+		{ toma = "Ojos", duracion = 5.5 },
+		{ toma = "Eldren", quien = "Eldren", texto = "Por fin abres los ojos. Llevas dos días dormido, forastero." },
+		{
+			toma = "Fuego",
+			quien = "Eldren",
+			texto = "Te encontré junto al camino, la noche en que el cielo tembló. Ardías de fiebre... y en tu piel brillaba una luz morada.",
+		},
+		{
+			toma = "Ventana",
+			quien = "Eldren",
+			texto = "Me llamo Eldren. Mi familia custodia el sello del Eclipse desde hace mil generaciones.",
+		},
+		{
+			toma = "Levantarse",
+			quien = "Eldren",
+			texto = "No sé quién eres ni de dónde vienes. Pero esa luz te ha elegido... y eso nunca ocurre por azar.",
+		},
+		{
+			toma = "Amuleto",
+			quien = "Eldren",
+			texto = "Toma este amuleto. A través de él podré hablarte, estés donde estés.",
+		},
+		{
+			toma = "Puerta",
+			quien = "Eldren",
+			texto = "Ahora sal. Ahí fuera hay unos muñecos de paja. Quiero ver si aún sabes pelear.",
+		},
+	},
+}
+
 -- Cuando se acaban las misiones del acto, el Custodio dice esto:
 HistoriaConfig.FIN_DEL_ACTO = {
 	"Los sellos siguen apagados. Pronto los monstruos del Eclipse saldrán de sus guaridas.",
@@ -246,7 +278,7 @@ HistoriaConfig.PROLOGO = {
 		texto = "La Guerra de los Guardianes partió montañas y cambió los océanos.\nCinco Guardianes dieron su esencia para sellarlo.",
 	},
 	{ lugar = "Capital", duracion = 6.5, texto = "Miles de años después, la historia se convirtió en leyenda..." },
-	{ lugar = "Inicio", duracion = 6.5, texto = "...y el sello empieza a romperse." },
+	{ lugar = "Inicio", duracion = 6.5, texto = "...y el sello empieza a romperse.\nAquella noche, el cielo tembló sobre el Valle de Aurelia." },
 }
 
 -- Busca una misión por su número

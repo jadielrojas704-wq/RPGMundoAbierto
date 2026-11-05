@@ -12,6 +12,15 @@
 -- Efectos de cada toma: "Temblor" (la tierra tiembla), "Eclipse" (rugido y luz violeta),
 -- "Destello" (relámpago blanco). Cada cinemática lleva su música, un coro de fondo,
 -- ráfagas de viento en los cortes, brasas doradas flotando y un golpe épico en el título.
+-- Más opciones:
+--   opciones.narrador = Voz.PERFILES.Narrador  -> una voz lee el texto de cada toma
+--     (cada toma dura lo que haga falta para que se oiga entera); toma.voz = texto distinto al subtítulo
+--     toma.perfil = otra voz para esa toma (p. ej. Voz.PERFILES.Eldren)
+--   opciones.sinBrasas / opciones.sinCoro / opciones.volumen
+--   opciones.alTerminar = function() end  -> se llama con la pantalla en negro, antes de devolver el control
+--   toma.camino = function(x, t) return CFrame end   -> movimiento de cámara propio (x de 0 a 1)
+--   toma.alEmpezar = function() end                 -> se llama al empezar la toma (mover personajes...)
+--   efecto "Dragon": rugido lejano del dragón de las montañas durante unos segundos
 
 local ContextActionService = game:GetService("ContextActionService")
 local Debris = game:GetService("Debris")
@@ -25,6 +34,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local SonidosConfig = require(ReplicatedStorage.Config.SonidosConfig)
+local Voz = require(script.Parent.Voz)
 
 local Cinematica = {}
 
@@ -186,6 +196,14 @@ function Cinematica.Reproducir(tomas, opciones)
 	local jugador = Players.LocalPlayer
 	jugador:SetAttribute("EnCinematica", true)
 	interfazRoblox(false)
+	-- los carteles flotantes del mundo (nombres de muñecos, NPC...) no salen en la escena
+	local carteles = {}
+	for _, b in Workspace:GetDescendants() do
+		if b:IsA("BillboardGui") and b.Enabled then
+			b.Enabled = false
+			table.insert(carteles, b)
+		end
+	end
 	local camara = Workspace.CurrentCamera
 	local fovAntes = camara.FieldOfView
 
@@ -220,7 +238,7 @@ function Cinematica.Reproducir(tomas, opciones)
 	local negro = Instance.new("Frame")
 	negro.Size = UDim2.fromScale(1, 1)
 	negro.BackgroundColor3 = Color3.new(0, 0, 0)
-	negro.BackgroundTransparency = 1
+	negro.BackgroundTransparency = 0 -- empieza en negro mientras se preparan las voces
 	negro.BorderSizePixel = 0
 	negro.ZIndex = 5
 	negro.Parent = pantalla
@@ -265,6 +283,7 @@ function Cinematica.Reproducir(tomas, opciones)
 	subtitulo.TextColor3 = Color3.fromRGB(240, 232, 214)
 	subtitulo.TextStrokeTransparency = 0.6
 	subtitulo.TextTransparency = 1
+	subtitulo.RichText = true
 	subtitulo.Text = ""
 	subtitulo.ZIndex = 6
 	subtitulo.Parent = pantalla
@@ -313,10 +332,45 @@ function Cinematica.Reproducir(tomas, opciones)
 
 	-- ===== música y ambiente =====
 	bajarMundo(true)
-	local musica = pista(opciones.musica or SonidosConfig.MUSICA.Prologo, opciones.volumen or 0.6, true)
-	local coro = pista(SonidosConfig.CINE.Coro, 0.22, true)
-	sonar(SonidosConfig.CINE.Zumbido, 0.4, 0.8, 12)
-	local pararBrasas = brasas(pantalla)
+	local volumenMusica = opciones.volumen or 0.4
+	local musica = pista(opciones.musica or SonidosConfig.MUSICA.Prologo, volumenMusica, true)
+	local coro = if opciones.sinCoro then nil else pista(SonidosConfig.CINE.Coro, 0.13, true)
+	sonar(SonidosConfig.CINE.Zumbido, 0.25, 0.8, 12)
+	local pararBrasas = if opciones.sinBrasas then function() end else brasas(pantalla)
+
+	-- ===== voces: se generan todas antes de empezar (mientras entran las franjas) =====
+	-- (Roblox solo deja generar una voz cada segundo más o menos: se generan en orden, en
+	-- segundo plano, mientras las tomas avanzan; se espera a tener al menos la primera)
+	local voces = {}
+	local conVoz = {}
+	do
+		for i, toma in tomas do
+			local texto = toma.voz or (if opciones.narrador or toma.perfil then toma.texto else nil)
+			if texto and texto ~= "" then
+				conVoz[i] = true
+				task.spawn(function()
+					voces[i] = Voz.Preparar(texto, toma.perfil or opciones.narrador)
+				end)
+			end
+		end
+		local primera = nil
+		for i = 1, #tomas do
+			if conVoz[i] then
+				primera = i
+				break
+			end
+		end
+		local espera = os.clock()
+		while primera and not voces[primera] and os.clock() - espera < 6 and not saltado do
+			task.wait(0.05)
+		end
+	end
+	-- la música baja mientras alguien habla
+	local function bajarMusica(hablando)
+		if musica and musica.Parent then
+			tween(musica, 0.6, { Volume = if hablando then volumenMusica * 0.45 else volumenMusica })
+		end
+	end
 
 	-- ===== tomas =====
 	camara.CameraType = Enum.CameraType.Scriptable
@@ -328,39 +382,84 @@ function Cinematica.Reproducir(tomas, opciones)
 			pcall(toma.preparar) -- p. ej. cargar esa zona del mapa antes de enseñarla
 		end
 		camara.FieldOfView = toma.fov or 60
-		camara.CFrame = toma.desde
-		if i > 1 then
+		camara.CFrame = if toma.camino then toma.camino(0, 0) else toma.desde
+		if i == 1 then
+			tween(negro, 0.9, { BackgroundTransparency = 1 })
+		else
 			tween(negro, 0.45, { BackgroundTransparency = 1 })
-			sonar(SonidosConfig.CINE.Corte, 0.3, 1, 8) -- ráfaga de viento en el corte
+			sonar(SonidosConfig.CINE.Corte, 0.18, 1, 8) -- ráfaga de viento en el corte
 		end
 		-- texto
 		subtitulo.Text = toma.texto or ""
 		subtitulo.TextTransparency = 1
 		tween(subtitulo, 0.8, { TextTransparency = 0 })
+		if toma.alEmpezar then
+			pcall(toma.alEmpezar)
+		end
 		local inicio = os.clock()
 		local duracion = toma.duracion or 5
-		local temblando = toma.efecto == "Temblor"
+		-- si la voz de esta toma aún se está generando, se espera un momento
+		local esperaVoz = os.clock()
+		while conVoz[i] and not voces[i] and os.clock() - esperaVoz < 2.5 and not saltado do
+			task.wait(0.05)
+		end
+		local voz = voces[i]
+		if voz and voz.duracion > 0 then
+			-- la toma dura al menos lo que tarda la voz, más un respiro
+			duracion = math.max(duracion, voz.duracion + 1.3)
+			task.delay(0.35, function()
+				if not saltado then
+					bajarMusica(true)
+					voz:Reproducir()
+					task.delay(voz.duracion, bajarMusica, false)
+				end
+			end)
+		end
+		local temblando = toma.efecto == "Temblor" or toma.efecto == "Dragon"
 		if toma.efecto == "Eclipse" or temblando then
 			correccion.TintColor = Color3.fromRGB(220, 190, 255)
 			tween(correccion, duracion, { TintColor = Color3.new(1, 1, 1) })
 		end
 		if toma.efecto == "Eclipse" then
-			sonar(SonidosConfig.CINE.Eclipse, 0.7, 0.85, 15)
+			sonar(SonidosConfig.CINE.Eclipse, 0.42, 0.85, 15)
 			flash(Color3.fromRGB(190, 120, 255), 0.55, 1.6)
 			brillo.Intensity = 1.4
 			tween(brillo, duracion, { Intensity = 0.55 })
+		elseif toma.efecto == "Dragon" then
+			-- el dragón oculto ruge entre los picos unos segundos (lejano, con eco)
+			task.delay(0.9, function()
+				if saltado then
+					return
+				end
+				local rugido = sonar(SonidosConfig.DRAGON.Rugidos[1], 0.5, 0.55, 12)
+				local eco = Instance.new("EchoSoundEffect")
+				eco.Delay = 0.5
+				eco.Feedback = 0.35
+				eco.WetLevel = -6
+				eco.Parent = rugido
+				local graves = Instance.new("EqualizerSoundEffect")
+				graves.LowGain = 6
+				graves.HighGain = -8
+				graves.Parent = rugido
+				sonar(SonidosConfig.DRAGON.Trueno, 0.35, 0.5, 10)
+				task.delay(3.6, function()
+					if rugido.Parent then
+						tween(rugido, 1.2, { Volume = 0 })
+					end
+				end)
+			end)
 		elseif temblando then
-			sonar(SonidosConfig.CINE.Golpe, 0.55, 0.7, 12)
+			sonar(SonidosConfig.CINE.Golpe, 0.32, 0.7, 12)
 		elseif toma.efecto == "Destello" then
-			sonar(SonidosConfig.CINE.Golpe, 0.7, 1, 12)
+			sonar(SonidosConfig.CINE.Golpe, 0.42, 1, 12)
 			flash(Color3.new(1, 1, 1), 0.85, 0.7)
 		end
 		if toma.sonido then
-			sonar(toma.sonido, toma.volumenSonido or 0.6, 1, 20)
+			sonar(toma.sonido, toma.volumenSonido or 0.4, 1, 20)
 		end
 		while os.clock() - inicio < duracion and not saltado do
 			local x = suave(math.clamp((os.clock() - inicio) / duracion, 0, 1))
-			local cf = toma.desde:Lerp(toma.hasta, x)
+			local cf = if toma.camino then toma.camino(x, os.clock() - inicio) else toma.desde:Lerp(toma.hasta, x)
 			if temblando then
 				local f = 0.25 * (1 - x * 0.5)
 				cf *= CFrame.Angles(
@@ -378,6 +477,9 @@ function Cinematica.Reproducir(tomas, opciones)
 				tween(subtitulo, 0.6, { TextTransparency = 1 })
 			end
 			RunService.RenderStepped:Wait()
+		end
+		if voz then
+			voz:Parar(0.3)
 		end
 		if i < #tomas and not saltado then
 			tween(negro, 0.4, { BackgroundTransparency = 0 }).Completed:Wait()
@@ -409,7 +511,7 @@ function Cinematica.Reproducir(tomas, opciones)
 		sub.TextSize = 22
 		sub.Text = opciones.subtitulo or ""
 		sub.Parent = pantalla
-		sonar(SonidosConfig.CINE.Golpe, 0.9, 0.85, 12) -- golpe épico del título
+		sonar(SonidosConfig.CINE.Golpe, 0.55, 0.85, 12) -- golpe épico del título
 		flash(Color3.fromRGB(255, 236, 200), 0.9, 1.4)
 		tween(titulo, 1.4, { TextTransparency = 0 })
 		tween(sub, 1.8, { TextTransparency = 0.2 })
@@ -423,10 +525,24 @@ function Cinematica.Reproducir(tomas, opciones)
 		tween(negro, 0.5, { BackgroundTransparency = 0 }).Completed:Wait()
 	end
 
+	-- con la pantalla en negro: quien llamó a la cinemática recoge sus cosas (actores, posición...)
+	if opciones.alTerminar then
+		pcall(opciones.alTerminar)
+	end
+
 	-- ===== volver al juego =====
 	conexionTecla:Disconnect()
 	ContextActionService:UnbindAction("BloqueoCinematica")
 	pararBrasas()
+	for _, voz in voces do
+		voz:Destruir()
+	end
+	-- las que aún se estuvieran generando se borran al acabar
+	task.delay(12, function()
+		for _, voz in voces do
+			voz:Destruir()
+		end
+	end)
 	apagar(musica, 2)
 	apagar(coro, 2)
 	bajarMundo(false)
@@ -445,6 +561,11 @@ function Cinematica.Reproducir(tomas, opciones)
 	tween(abajo, 0.6, { AnchorPoint = Vector2.new(0, 0) })
 	tween(negro, 0.9, { BackgroundTransparency = 1 }).Completed:Wait()
 	pantalla:Destroy()
+	for _, b in carteles do
+		if b.Parent then
+			b.Enabled = true
+		end
+	end
 	jugador:SetAttribute("EnCinematica", nil)
 	interfazRoblox(true)
 	reproduciendo = false

@@ -694,9 +694,12 @@ function Centros.Sol(modelo, centro, grande, _cultura)
 	local superficie = bloque(modelo, CFrame.new(centro + Vector3.new(0, 1.62, 0)), Vector3.new(lado - 1.4, 0.2, lado - 1.4), M.Glass, Color3.fromRGB(60, 140, 160), "Agua")
 	superficie.Transparency = 0.25
 	superficie.CanCollide = false
-	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
-			Vegetacion.Palmera(centro + Vector3.new(sx * (lado / 2 + 2.5), -0.5, sz * (lado / 2 + 2.5)), modelo)
+	-- (en el jardín del palacio de la capital ya hay filas de palmeras: aquí no hacen falta)
+	if not grande then
+		for _, sx in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				Vegetacion.Palmera(centro + Vector3.new(sx * (lado / 2 + 1.6), -0.5, sz * (lado / 2 + 1.6)), modelo)
+			end
 		end
 	end
 end
@@ -1225,6 +1228,125 @@ local KIT = {
 	distanciaForma = Terreno.DistanciaForma,
 }
 
+
+-- ===================================================================
+-- ===== LIMPIEZA FINAL: que nada se pise =====
+-- ===================================================================
+-- Mide cada edificio ya construido (tejados y aleros incluidos) y, si dos se pisan:
+--   * una palmera o un árbol dentro de un edificio -> se quita la planta
+--   * una casa contra una muralla, torre, tienda u otra casa -> se quita la casa
+-- Devuelve las puertas de las casas quitadas (para que nadie "viva" en ellas).
+local function cajaPlana(objeto)
+	local cf, tam
+	if objeto:IsA("BasePart") then
+		cf, tam = objeto.CFrame, objeto.Size
+	else
+		cf, tam = objeto:GetBoundingBox()
+	end
+	local _, giro = cf:ToEulerAnglesYXZ()
+	return { cf = CFrame.new(cf.Position) * CFrame.Angles(0, giro, 0), t = tam }
+end
+
+local function solapan(a, b, margen)
+	local d = b.cf.Position - a.cf.Position
+	if math.abs(d.Y) > (a.t.Y + b.t.Y) / 2 then
+		return false
+	end
+	for _, eje in { a.cf.RightVector, a.cf.LookVector, b.cf.RightVector, b.cf.LookVector } do
+		local function radio(o)
+			return o.t.X / 2 * math.abs(o.cf.RightVector:Dot(eje)) + o.t.Z / 2 * math.abs(o.cf.LookVector:Dot(eje))
+		end
+		if math.abs(d:Dot(eje)) > radio(a) + radio(b) - margen then
+			return false
+		end
+	end
+	return true
+end
+
+local PLANTAS = { Palmera = true, HayaJoven = true, Helecho = true }
+
+local function limpiarChoques(modelo)
+	local fijos, casas, plantas = {}, {}, {}
+	for _, hijo in modelo:GetChildren() do
+		if hijo.Name == "Muralla" or hijo.Name == "Valla" then
+			for _, tramo in hijo:GetChildren() do
+				if tramo:IsA("Model") or tramo:IsA("BasePart") then
+					table.insert(fijos, { obj = tramo, caja = cajaPlana(tramo) })
+				end
+			end
+		elseif hijo:IsA("Model") and not hijo:FindFirstChildOfClass("Humanoid") then
+			local caja = cajaPlana(hijo)
+			if caja.t.X * caja.t.Z >= 30 and caja.t.X < 400 then
+				if PLANTAS[hijo.Name] then
+					table.insert(plantas, { obj = hijo, caja = caja })
+				elseif string.sub(hijo.Name, 1, 4) == "Casa" then
+					table.insert(casas, { obj = hijo, caja = caja })
+				else
+					table.insert(fijos, { obj = hijo, caja = caja })
+				end
+			end
+		end
+	end
+	local quitadas = {}
+	local quitarCasa = {}
+	-- casas contra lo fijo (murallas, tiendas, palacios...) y contra otras casas
+	for i, casa in casas do
+		for _, f in fijos do
+			if solapan(casa.caja, f.caja, 1.2) then
+				quitarCasa[i] = true
+				break
+			end
+		end
+		if not quitarCasa[i] then
+			for j = 1, i - 1 do
+				if not quitarCasa[j] and solapan(casa.caja, casas[j].caja, 1.2) then
+					quitarCasa[i] = true
+					break
+				end
+			end
+		end
+	end
+	local quedan = {}
+	for i, casa in casas do
+		if quitarCasa[i] then
+			local puerta = casa.obj:GetAttribute("Puerta")
+			if puerta then
+				quitadas[puerta] = true
+			end
+			casa.obj:Destroy()
+		else
+			table.insert(quedan, casa)
+		end
+	end
+	-- plantas dentro de cualquier edificio
+	local quitadasPlantas = 0
+	for _, planta in plantas do
+		local caja = { cf = planta.caja.cf, t = Vector3.new(planta.caja.t.X * 0.7, planta.caja.t.Y, planta.caja.t.Z * 0.7) }
+		for _, lista in { fijos, quedan } do
+			local choca = false
+			for _, f in lista do
+				if solapan(caja, f.caja, 0.8) then
+					choca = true
+					break
+				end
+			end
+			if choca then
+				planta.obj:Destroy()
+				quitadasPlantas += 1
+				break
+			end
+		end
+	end
+	local cuantas = 0
+	for _ in quitadas do
+		cuantas += 1
+	end
+	if cuantas > 0 or quitadasPlantas > 0 then
+		print(string.format("[PUEBLOS] %s: quitadas %d casas y %d plantas que se pisaban", modelo.Name, cuantas, quitadasPlantas))
+	end
+	return quitadas
+end
+
 local function construirPueblo(padre, pueblo, sitio)
 	local cultura = PueblosConfig.CULTURAS[pueblo.cultura]
 	local culturaId = pueblo.cultura
@@ -1349,14 +1471,15 @@ local function construirPueblo(padre, pueblo, sitio)
 			local distancia = n(radioPlaza + 18, radio * (if esCapital then 0.82 else 0.86))
 			local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * distancia
 			if (p - centro).Magnitude < radio * 0.88 then
-				local estimado = if culturaId == "Norte" then 15 else 10.5
+				local estimado = if culturaId == "Norte" then 16.5 else 12
 				if libre(p, estimado) then
 					local yy = sueloEn(p.X, p.Z, y)
 					-- las casas miran hacia la plaza, con un poco de desorden
 					local cf = mirandoA(Vector3.new(p.X, yy, p.Z), plaza) * CFrame.Angles(0, math.rad(n(-14, 14)), 0)
 					local casa, r, _, puerta = Casas[culturaId](modelo, cf)
 					casa.Name = "Casa" .. (#casas + 1)
-					ocupar(p, r)
+					casa:SetAttribute("Puerta", puerta.Position)
+					ocupar(p, r + 1.5) -- un poco de aire entre tejados
 					table.insert(casas, puerta.Position)
 					punto("Puerta", puerta.Position)
 					-- detalles junto a la casa
@@ -1412,7 +1535,7 @@ local function construirPueblo(padre, pueblo, sitio)
 			for _ = 1, (if esCapital then 8 else 6) do
 				local angulo = n(0, math.pi * 2)
 				local p = plaza + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * n(radioPlaza + 4, radio * 0.8)
-				if libre(p, 3) then
+				if libre(p, 10) then -- la copa de la palmera es ancha: que no toque los tejados
 					Vegetacion.Palmera(Vector3.new(p.X, sueloEn(p.X, p.Z, y) - 0.5, p.Z), modelo)
 					ocupar(p, 3)
 				end
@@ -1422,6 +1545,29 @@ local function construirPueblo(padre, pueblo, sitio)
 		-- 8) Un callejón sin salida (para las escenas de los nobles)
 		Ciudades.CallejonAldea(KIT, { modelo = modelo, sitio = sitio, pueblo = pueblo, cultura = cultura, culturaId = culturaId, centro = centro, punto = punto }, ocupados, plaza, radio)
 
+	end
+
+	-- Antes de poner a la gente: limpieza final para que nada se pise
+	local quitadas = limpiarChoques(modelo)
+	if next(quitadas) then
+		local siguen = {}
+		for _, puerta in casas do
+			if not quitadas[puerta] then
+				table.insert(siguen, puerta)
+			end
+		end
+		casas = siguen
+		-- y nadie camina hasta la puerta de una casa que ya no está
+		for _, v in puntos:GetChildren() do
+			if v.Name == "Puerta" then
+				for puerta in quitadas do
+					if (Vector2.new(v.Value.X, v.Value.Z) - Vector2.new(puerta.X, puerta.Z)).Magnitude < 0.6 then
+						v:Destroy()
+						break
+					end
+				end
+			end
+		end
 	end
 
 	-- Gente: tenderos y guardias (ya puestos), nobles y plebeyos que viven en las casas.

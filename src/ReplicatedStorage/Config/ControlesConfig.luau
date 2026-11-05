@@ -13,6 +13,7 @@ ControlesConfig.ORDEN = {
 	"Bloqueo",
 	"Esquiva",
 	"Correr",
+	"Caminar",
 	"HabilidadQ",
 	"HabilidadE",
 	"HabilidadR",
@@ -20,6 +21,7 @@ ControlesConfig.ORDEN = {
 	"Ultimate",
 	"FijarObjetivo",
 	"Interactuar",
+	"Rastrear",
 	"Menu",
 	"ShiftLock",
 }
@@ -29,6 +31,7 @@ ControlesConfig.ACCIONES = {
 	Bloqueo = { nombre = "Bloquear / parry", tecla = "MouseButton2" },
 	Esquiva = { nombre = "Esquivar", tecla = "LeftShift" },
 	Correr = { nombre = "Correr (mantener; también doble W)", tecla = "LeftControl" },
+	Caminar = { nombre = "Caminar tranquilo (pulsar para cambiar)", tecla = "Z" },
 	HabilidadQ = { nombre = "Habilidad 1", tecla = "Q" },
 	HabilidadE = { nombre = "Habilidad 2", tecla = "E" },
 	HabilidadR = { nombre = "Habilidad 3", tecla = "R" },
@@ -36,6 +39,7 @@ ControlesConfig.ACCIONES = {
 	Ultimate = { nombre = "Ultimate", tecla = "V" },
 	FijarObjetivo = { nombre = "Fijar objetivo", tecla = "MouseButton3" },
 	Interactuar = { nombre = "Hablar / interactuar", tecla = "G" },
+	Rastrear = { nombre = "Rastrear la misión (marca y minimapa)", tecla = "T" },
 	Menu = { nombre = "Abrir el menú", tecla = "M" },
 	ShiftLock = { nombre = "Shift Lock (cámara fija)", tecla = "CapsLock", soloTeclado = true },
 }

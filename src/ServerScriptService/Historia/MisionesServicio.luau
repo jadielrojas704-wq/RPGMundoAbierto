@@ -7,7 +7,8 @@
 --   Textos      { [idTexto] = true } textos antiguos que ya leyó (sus "Crónicas")
 --   PrologoVisto  si ya vio la cinemática del principio
 -- Otros servicios avisan con MisionesServicio.Evento(jugador, tipo, dato):
---   "Golpe" (CombateServicio), "Leer" (RuinasServicio), "Hablar" (el Custodio).
+--   "Golpe" (CombateServicio), "Leer" (RuinasServicio), "Hablar" (el Custodio),
+--   "Despertar" (el cliente avisa al acabar la cinemática de la cabaña).
 -- Al cliente le llegan mensajes por Remotes/Historia:
 --   "Mision"     estado de la misión actual (para el rastreador y el menú)
 --   "Completada" misión terminada con su recompensa
@@ -28,6 +29,7 @@ local DatosServicio = require(script.Parent.Parent.Progresion.DatosServicio)
 local PersonajeServicio = require(script.Parent.Parent.Progresion.PersonajeServicio)
 local AparienciaServicio = require(script.Parent.Parent.Progresion.AparienciaServicio)
 local RuinasServicio = require(script.Parent.RuinasServicio)
+local CabanaServicio = require(script.Parent.CabanaServicio)
 
 local Remoto = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Historia")
 
@@ -76,7 +78,10 @@ end
 -- Dónde está el objetivo (para la marca en pantalla)
 local function destino(h, mision)
 	local o = mision.objetivo
-	if o.tipo == "Hablar" then
+	if o.tipo == "Despertar" then
+		local cabana = Workspace:FindFirstChild("Historia") and Workspace.Historia:FindFirstChild("CabanaEldren")
+		return cabana and cabana:GetAttribute("Centro")
+	elseif o.tipo == "Hablar" then
 		local raiz = custodio and custodio:FindFirstChild("HumanoidRootPart")
 		return raiz and raiz.Position
 	elseif o.tipo == "Golpes" then
@@ -207,6 +212,8 @@ function MisionesServicio.Evento(jugador, tipo, dato)
 	local o = mision.objetivo
 	if tipo == "Hablar" and o.tipo == "Hablar" and o.objetivo == dato then
 		completar(jugador)
+	elseif tipo == "Despertar" and o.tipo == "Despertar" then
+		completar(jugador)
 	elseif tipo == "Golpe" and o.tipo == "Golpes" then
 		DatosServicio.Modificar(jugador, function(d)
 			d.Historia.Progreso += 1
@@ -241,6 +248,9 @@ local function crearCustodio()
 		or Vector3.new(RegionesConfig.INICIO.X, 60, RegionesConfig.INICIO.Y)
 	local d = HistoriaConfig.CUSTODIO.desplazamiento
 	local x, z = inicio.X + d.X, inicio.Z + d.Z
+	-- Eldren espera en el porche de su cabaña, mirando hacia los muñecos
+	local cabana = CabanaServicio.Modelo()
+	local porche = cabana and cabana:GetAttribute("Porche")
 	local descripcion = AparienciaServicio.Descripcion({
 		Genero = "Hombre",
 		Piel = 2,
@@ -264,8 +274,12 @@ local function crearCustodio()
 	humanoide.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	local raiz = modelo:WaitForChild("HumanoidRootPart")
 	raiz.Anchored = true
-	local y = suelo(x, z) + humanoide.HipHeight + raiz.Size.Y / 2
-	modelo:PivotTo(CFrame.lookAt(Vector3.new(x, y, z), Vector3.new(inicio.X, y, inicio.Z)))
+	if typeof(porche) == "CFrame" then
+		modelo:PivotTo(porche * CFrame.new(0, humanoide.HipHeight + raiz.Size.Y / 2, 0))
+	else
+		local y = suelo(x, z) + humanoide.HipHeight + raiz.Size.Y / 2
+		modelo:PivotTo(CFrame.lookAt(Vector3.new(x, y, z), Vector3.new(inicio.X, y, inicio.Z)))
+	end
 	modelo.Parent = Workspace:FindFirstChild("Historia") or Workspace
 
 	-- cartel con el nombre
@@ -323,7 +337,9 @@ local function crearCustodio()
 			return
 		end
 		local mision = HistoriaConfig.Mision(datos.Historia.Mision)
-		if mision and mision.objetivo.tipo == "Hablar" then
+		if mision and mision.objetivo.tipo == "Despertar" then
+			decir(jugador, { "Aún estás débil... descansa un poco más." })
+		elseif mision and mision.objetivo.tipo == "Hablar" then
 			MisionesServicio.Evento(jugador, "Hablar", "Custodio")
 		elseif mision then
 			decir(jugador, { "Ahora tu tarea es esta: " .. mision.objetivo.texto .. ".", mision.descripcion })
@@ -339,11 +355,46 @@ function MisionesServicio.Iniciar()
 	RuinasServicio.Iniciar(function(jugador, idTexto)
 		MisionesServicio.Evento(jugador, "Leer", idTexto)
 	end)
-	task.spawn(crearCustodio)
+	task.spawn(function()
+		CabanaServicio.Iniciar()
+		crearCustodio()
+	end)
 
 	Remoto.OnServerEvent:Connect(function(jugador, accion)
 		if accion == "Pedir" then
 			enviarEstado(jugador)
+		elseif accion == "Cama" or accion == "DePie" or accion == "Desperto" then
+			-- cinemática del despertar: el SERVIDOR coloca al personaje (en la cama, de pie...)
+			local datos = DatosServicio.Obtener(jugador)
+			local mision = datos and HistoriaConfig.Mision(datos.Historia.Mision)
+			local personaje = jugador.Character
+			local raiz = personaje and personaje:FindFirstChild("HumanoidRootPart")
+			local humanoide = personaje and personaje:FindFirstChildOfClass("Humanoid")
+			local cabana = CabanaServicio.Modelo()
+			local enEsaMision = mision and mision.objetivo.tipo == "Despertar"
+			if raiz and humanoide and cabana and enEsaMision then
+				local alto = humanoide.HipHeight + raiz.Size.Y / 2
+				local salida = cabana:GetAttribute("Salida")
+				local puerta = cabana:GetAttribute("Puerta")
+				if accion == "Cama" then
+					raiz.Anchored = true
+					personaje:PivotTo(cabana:GetAttribute("Cama"))
+				elseif accion == "DePie" then
+					raiz.Anchored = true
+					personaje:PivotTo(salida * CFrame.new(0, alto, 0))
+				else
+					-- de pie junto a la cama, mirando a la puerta, y libre
+					local p = salida.Position + Vector3.new(0, alto, 0)
+					personaje:PivotTo(CFrame.lookAt(p, Vector3.new(puerta.Position.X, p.Y, puerta.Position.Z)))
+					raiz.Anchored = false
+				end
+			elseif raiz and accion == "Desperto" then
+				raiz.Anchored = false
+			end
+			if accion == "Desperto" then
+				-- el jugador acabó la cinemática de la cabaña (solo cuenta si está en esa misión)
+				MisionesServicio.Evento(jugador, "Despertar")
+			end
 		elseif accion == "PrologoVisto" then
 			DatosServicio.Modificar(jugador, function(d)
 				d.Historia.PrologoVisto = true

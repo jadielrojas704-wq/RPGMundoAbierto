@@ -34,6 +34,7 @@ CombateConfig.Esquiva = {
 CombateConfig.Correr = {
 	VELOCIDAD_CAMINAR = 16, -- velocidad normal (la de Roblox por defecto)
 	VELOCIDAD_CORRER = 26, -- velocidad al correr
+	VELOCIDAD_PASEO = 8, -- caminar tranquilo (tecla Caminar): se ve la animación de andar
 	COSTO_POR_SEGUNDO = 14, -- estamina que gasta correr cada segundo (solo si te mueves)
 	MINIMO_PARA_REANUDAR = 30, -- si te quedas sin estamina, vuelves a correr al llegar a esto
 	VENTANA_DOBLE_W = 0.3, -- segundos máximos entre los dos toques de W

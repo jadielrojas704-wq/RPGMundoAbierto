@@ -1208,6 +1208,23 @@ local function jugar()
 			camara.CameraType = Enum.CameraType.Custom
 		end
 		ReplicatedStorage.Remotes:WaitForChild("Historia"):FireServer("PrologoVisto")
+		estado.PrologoVisto = true
+	end
+	-- la primera vez: "Dos días después..." el jugador despierta en la cabaña de Eldren
+	if estado.Mision == 1 then
+		if pantalla.Parent then
+			pantalla:Destroy()
+		end
+		local Despertar = require(ReplicatedStorage.Interfaz:WaitForChild("Despertar"))
+		local ok, err = pcall(Despertar.Reproducir)
+		if not ok then
+			warn("[DESPERTAR]", err)
+			Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+		end
+		estado.Mision = 2
+		return
+	end
+	if not pantalla.Parent then
 		return
 	end
 	task.wait(0.3)

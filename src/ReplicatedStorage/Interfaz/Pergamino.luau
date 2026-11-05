@@ -11,6 +11,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local HistoriaConfig = require(ReplicatedStorage.Config.HistoriaConfig)
+local Voz = require(script.Parent.Voz)
 
 local Pergamino = {}
 
@@ -18,6 +19,7 @@ local TINTA = Color3.fromRGB(58, 38, 20)
 local actual = nil
 
 function Pergamino.Cerrar()
+	Voz.Callar("pergamino")
 	if actual then
 		local gui = actual
 		actual = nil
@@ -45,6 +47,12 @@ function Pergamino.Abrir(idTexto, nuevo)
 	gui.ResetOnSpawn = false
 	gui.Parent = jugador:WaitForChild("PlayerGui")
 	actual = gui
+	-- la voz del que lo escribió lee la inscripción (grave y con eco)
+	task.delay(0.6, function()
+		if actual == gui then
+			Voz.Decir(datos.texto, Voz.PERFILES.Guardian, "pergamino")
+		end
+	end)
 
 	local velo = Instance.new("TextButton")
 	velo.Text = ""

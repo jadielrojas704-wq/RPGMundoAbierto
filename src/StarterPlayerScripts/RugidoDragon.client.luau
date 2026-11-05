@@ -103,10 +103,10 @@ local function rugir(posicion)
 	local principal = rugidos[rng:NextInteger(1, #rugidos)]
 	local segundo = rugidos[rng:NextInteger(1, #rugidos)]
 	-- el retumbar de la montaña llega primero, luego la voz, luego el eco grave
-	capaDeSonido(emisor, SonidosConfig.DRAGON.Trueno, 2, 0.5, 0, false)
-	capaDeSonido(emisor, principal, 3, rng:NextNumber(0.5, 0.6), 0.25, true)
-	capaDeSonido(emisor, segundo, 2, rng:NextNumber(0.62, 0.72), 0.45, true)
-	capaDeSonido(emisor, SonidosConfig.DRAGON.Grunido, 1.4, 0.55, 3.2, true)
+	capaDeSonido(emisor, SonidosConfig.DRAGON.Trueno, 1.2, 0.5, 0, false)
+	capaDeSonido(emisor, principal, 1.8, rng:NextNumber(0.5, 0.6), 0.25, true)
+	capaDeSonido(emisor, segundo, 1.2, rng:NextNumber(0.62, 0.72), 0.45, true)
+	capaDeSonido(emisor, SonidosConfig.DRAGON.Grunido, 0.9, 0.55, 3.2, true)
 end
 
 -- ===== 2. LA TIERRA TIEMBLA =====

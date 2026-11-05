@@ -112,6 +112,38 @@ local function chocan(p, q)
 	return true
 end
 
+-- Rectángulo REAL de un modelo ya construido (tejados y aleros incluidos),
+-- medido sobre los ejes de cf. Así nada se pisa aunque el tejado sobresalga.
+local function medirModelo(modelo, cf)
+	local ejeA, ejeB = cf.RightVector, cf.LookVector
+	local a0, a1, b0, b1 = math.huge, -math.huge, math.huge, -math.huge
+	for _, p in modelo:GetDescendants() do
+		if p:IsA("BasePart") and p.Transparency < 1 then
+			local h = p.Size / 2
+			local c = p.Position
+			local ea = math.abs(ejeA:Dot(p.CFrame.RightVector)) * h.X + math.abs(ejeA:Dot(p.CFrame.UpVector)) * h.Y + math.abs(ejeA:Dot(p.CFrame.LookVector)) * h.Z
+			local eb = math.abs(ejeB:Dot(p.CFrame.RightVector)) * h.X + math.abs(ejeB:Dot(p.CFrame.UpVector)) * h.Y + math.abs(ejeB:Dot(p.CFrame.LookVector)) * h.Z
+			local da, db = ejeA:Dot(c), ejeB:Dot(c)
+			a0, a1 = math.min(a0, da - ea), math.max(a1, da + ea)
+			b0, b1 = math.min(b0, db - eb), math.max(b1, db + eb)
+		end
+	end
+	if a0 == math.huge then
+		return nil
+	end
+	local centro = ejeA * ((a0 + a1) / 2) + ejeB * ((b0 + b1) / 2)
+	return {
+		c = Vector2.new(centro.X, centro.Z),
+		a = Vector2.new(ejeA.X, ejeA.Z).Unit,
+		b = Vector2.new(ejeB.X, ejeB.Z).Unit,
+		ha = (a1 - a0) / 2,
+		hb = (b1 - b0) / 2,
+	}
+end
+
+-- Lo que puede quedar por debajo de un alero sin que sea un choque
+local SUELO_LIBRE = { calle = true, plaza = true, farol = true, callejon = true }
+
 local function esquinas(o)
 	if o.r then
 		return { o.c }, o.r
@@ -208,6 +240,47 @@ function Ciudad:libre(o, margen, ignorar)
 		end
 	end
 	return true
+end
+
+-- ¿El edificio ya construido choca con otro edificio, tienda, palmera...?
+function Ciudad:chocaReal(o, ignorar)
+	for _, otro in self.ocupados do
+		if not SUELO_LIBRE[otro.tipo] and not (ignorar and ignorar[otro.tipo]) and otro ~= self.rellenoActual and chocan(o, otro) then
+			return true
+		end
+	end
+	return false
+end
+
+-- Palmera solo si su copa (unos 6,5 studs) no se mete en ningún edificio
+local RADIO_COPA = 6.5
+function Ciudad:palmera(base)
+	local copa = circulo(base, RADIO_COPA)
+	-- (dentro del recinto del palacio o la ciudadela sí puede haber palmeras, pero no encima del edificio)
+	if self:chocaReal(copa, { palacio = true, ciudadela = true }) or not self:dentro(circulo(base, 2), 0) then
+		return nil
+	end
+	local p = K.Vegetacion.Palmera(base, self.modelo)
+	self:ocupar(circulo(base, 3), "planta")
+	return p
+end
+
+-- Construye un edificio grande (palacio, castillo, salón) y aparta su sitio real
+function Ciudad:registrar(cf, construir)
+	local antes = {}
+	for _, hijo in self.modelo:GetChildren() do
+		antes[hijo] = true
+	end
+	local resultado = table.pack(construir())
+	for _, hijo in self.modelo:GetChildren() do
+		if not antes[hijo] and hijo:IsA("Model") then
+			local real = medirModelo(hijo, cf)
+			if real then
+				self:ocupar(real, "principal")
+			end
+		end
+	end
+	return table.unpack(resultado, 1, resultado.n)
 end
 
 function Ciudad:ocupar(o, tipo)
@@ -343,7 +416,19 @@ function Ciudad:fila(puntos, anchoCalle, lado, opciones)
 				pisos = opciones.pisos,
 			})
 			casa.Name = "Casa" .. (#self.casas + 1)
-			self:ocupar(forma)
+			casa:SetAttribute("Puerta", puerta.Position)
+			-- se mide la casa de verdad: si su tejado pisa otra cosa, se quita
+			local real = medirModelo(casa, cf)
+			if real then
+				real.ha += 0.4
+				real.hb += 0.4
+			end
+			if real and self:chocaReal(real) then
+				casa:Destroy()
+				t += 2.5
+				continue
+			end
+			self:ocupar(real or forma)
 			table.insert(self.casas, puerta.Position)
 			self.punto("Puerta", puerta.Position)
 			if anchoCalle >= 8 and rng:NextNumber() < 0.35 then
@@ -364,21 +449,69 @@ function Ciudad:fila(puntos, anchoCalle, lado, opciones)
 end
 
 -- Tienda con la fachada mirando a "direccion" (hacia la plaza o la calle)
-function Ciudad:tienda(cf, tipo)
+-- comprobar = true: si la tienda ya construida pisa otra cosa, se quita y devuelve false
+function Ciudad:tienda(cf, tipo, comprobar)
 	local anchoTienda = if self.culturaId == "Norte" then 19 else 15
-	self:ocupar(rectangulo(cf * CFrame.new(0, 0, -3.7), anchoTienda, 19))
+	local antes = {}
+	for _, hijo in self.modelo:GetChildren() do
+		antes[hijo] = true
+	end
 	local tendero = K.tienda(self.modelo, cf, tipo, self.culturaId, self.cultura)
+	local nuevos, reales = {}, {}
+	for _, hijo in self.modelo:GetChildren() do
+		if not antes[hijo] then
+			table.insert(nuevos, hijo)
+			if hijo:IsA("Model") then
+				local real = medirModelo(hijo, cf)
+				if real then
+					real.ha += 0.4
+					real.hb += 0.4
+					table.insert(reales, real)
+				end
+			end
+		end
+	end
+	if comprobar then
+		for _, real in reales do
+			if self:chocaReal(real) then
+				for _, hijo in nuevos do
+					hijo:Destroy()
+				end
+				return false
+			end
+		end
+	end
+	self:ocupar(rectangulo(cf * CFrame.new(0, 0, -3.7), anchoTienda, 19))
+	for _, real in reales do
+		self:ocupar(real)
+	end
 	table.insert(self.npcs, { oficio = tipo, cf = tendero, tienda = tipo, rol = "Tendero", clase = "Plebeyo" })
 	self.punto("Tienda", (tendero * CFrame.new(0, 0, -6.5)).Position)
+	return true
 end
 
 -- Tiendas en fila a un lado de una calle (el mostrador da a la calle)
 function Ciudad:filaTiendas(puntos, anchoCalle, lado, tipos, desde, paso)
+	local t = desde
+	local total = largoTotal(puntos)
 	for i, tipo in tipos do
-		local p, direccion = recorrer(puntos, desde + (i - 1) * paso)
-		local fuera = derecha(direccion) * lado
-		local cf = mirando(self:suelo(p + fuera * (anchoCalle / 2 + 13.4)), -fuera)
-		self:tienda(cf, tipo)
+		-- si en una curva la tienda pisa a la anterior, se corre un poco calle adelante
+		local puesta = false
+		for _ = 1, 24 do
+			local p, direccion = recorrer(puntos, math.min(t, total))
+			local fuera = derecha(direccion) * lado
+			local cf = mirando(self:suelo(p + fuera * (anchoCalle / 2 + 13.4)), -fuera)
+			local ultima = i == #tipos and t >= total
+			if self:tienda(cf, tipo, not ultima) then
+				puesta = true
+				break
+			end
+			t += 3
+		end
+		if not puesta then
+			warn("[CIUDADES] No cupo la tienda", tipo)
+		end
+		t += paso
 	end
 end
 
@@ -546,7 +679,7 @@ end
 function RELLENOS.Sol(self, cf)
 	if rng:NextNumber() < 0.5 then
 		for _, x in { -3, 3 } do
-			K.Vegetacion.Palmera((cf * CFrame.new(x, -0.5, n(-2, 2))).Position, self.modelo)
+			self:palmera((cf * CFrame.new(x, -0.5, n(-2, 2))).Position)
 		end
 	else
 		-- tienda de lona de los mercaderes
@@ -600,7 +733,9 @@ function Ciudad:rellenar(maximo)
 			local forma = rectangulo(cf, 14, 11)
 			if self:libre(forma, 9) then
 				self:ocupar(forma, "relleno")
+				self.rellenoActual = forma
 				RELLENOS[self.culturaId](self, cf)
+				self.rellenoActual = nil
 				puestos += 1
 			end
 		end
@@ -851,7 +986,9 @@ function Trazados.Reino(c, pueblo)
 			C.fuego(c.modelo, cima + Vector3.new(0, 0.8, 0), 2.2)
 		end,
 	})
-	K.Principales.Reino(c.modelo, c:CF(-98, 0, 1, 0), cultura)
+	c:registrar(c:CF(-98, 0, 1, 0), function()
+		return K.Principales.Reino(c.modelo, c:CF(-98, 0, 1, 0), cultura)
+	end)
 	-- patio de armas delante del castillo
 	bloque(c.modelo, c:CF(-69, 0, 1, 0) * CFrame.new(0, -0.15, 0), Vector3.new(mitad * 2 - 4, 1, 16), M.Cobblestone, Color3.fromRGB(150, 146, 138), "PatioArmas")
 	for _, v in { -24, -12, 12, 24 } do
@@ -992,13 +1129,15 @@ function Trazados.Sol(c, pueblo)
 			C.bola(c.modelo, cima + Vector3.new(0, 1, 0), 3, M.Foil, cultura.detalle, "Remate")
 		end,
 	})
-	K.Principales.Sol(c.modelo, c:CF(-92, 0, 1, 0), cultura)
+	c:registrar(c:CF(-92, 0, 1, 0), function()
+		return K.Principales.Sol(c.modelo, c:CF(-92, 0, 1, 0), cultura)
+	end)
 	-- paseo de mármol del jardín, estanque y palmeras en fila
 	bloque(c.modelo, c:CF(-56, 0, 1, 0) * CFrame.new(0, -0.1, 0), Vector3.new(8, 1, 34), M.Marble, Color3.fromRGB(240, 234, 222), "Paseo")
 	K.Centros.Sol(c.modelo, c:P(-58, 0), true, cultura)
 	for u = fondoP + 8, frente - 8, 13 do
 		for _, s in { -1, 1 } do
-			K.Vegetacion.Palmera(c:P(u, s * (mitad - 8)) - Vector3.new(0, 0.5, 0), c.modelo)
+			c:palmera(c:P(u, s * (mitad - 8)) - Vector3.new(0, 0.5, 0))
 		end
 	end
 	for _, v in { -36, -22, 22, 36 } do
@@ -1048,7 +1187,7 @@ function Trazados.Sol(c, pueblo)
 	end
 	for _, s in { -1, 1 } do
 		for _, k in { -1, 1 } do
-			K.Vegetacion.Palmera(c:P(40 + k * 21, s * 22) - Vector3.new(0, 0.5, 0), c.modelo)
+			c:palmera(c:P(40 + k * 21, s * 22) - Vector3.new(0, 0.5, 0))
 		end
 	end
 
@@ -1139,7 +1278,9 @@ function Trazados.Brujos(c, pueblo)
 		-- escalones hacia la puerta de la ciudad
 		bloque(c.modelo, c:CF(16 + 4 - k * 1.4, 0, 1, 0) * CFrame.new(0, 0.2 + k * 1.05, 0), Vector3.new(10, 1.1, 1.6), M.Basalt, basalto, "Escalon")
 	end
-	K.Principales.Brujos(c.modelo, c:CF(0, 0, 1, 0) * CFrame.new(0, 3.2, 0), cultura)
+	c:registrar(c:CF(0, 0, 1, 0), function()
+		return K.Principales.Brujos(c.modelo, c:CF(0, 0, 1, 0) * CFrame.new(0, 3.2, 0), cultura)
+	end)
 	c:ocupar(circulo(c.centro, 22), "torre")
 	-- el círculo ritual, a un lado de la torre
 	K.Centros.Brujos(c.modelo, c:P(-33, 0), true, cultura)
@@ -1289,9 +1430,9 @@ function Trazados.Norte(c, pueblo)
 	local izquierda = math.ceil(#tiendas / 2)
 	for i, tipo in tiendas do
 		if i <= izquierda then
-			c:tienda(c:CF(32 + (i - 1) * 24, -(5.5 + 13.4), 0, 1), tipo)
+			c:tienda(c:CF(30 + (i - 1) * 28, -(5.5 + 13.4), 0, 1), tipo)
 		else
-			c:tienda(c:CF(44 + (i - izquierda - 1) * 24, 5.5 + 13.4, 0, -1), tipo)
+			c:tienda(c:CF(44 + (i - izquierda - 1) * 28, 5.5 + 13.4, 0, -1), tipo)
 		end
 	end
 	for _, datos in { { 46, -1 }, { 70, 1 }, { 30, 1 } } do

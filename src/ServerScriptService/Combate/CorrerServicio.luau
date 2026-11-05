@@ -1,6 +1,7 @@
 -- Controla quién está corriendo. El SERVIDOR decide la velocidad y cobra la estamina.
 -- Ruta en Studio: ServerScriptService/Combate/CorrerServicio
--- El cliente solo avisa "quiero correr" / "ya no quiero correr" (RemoteEvent Correr).
+-- El cliente solo avisa "quiero correr" / "ya no quiero correr" (RemoteEvent Correr),
+-- o ("Caminar", true/false) para ir a paso tranquilo (tecla Z de fábrica).
 -- Aquí se comprueba la estamina, se gasta mientras te mueves y se cambia
 -- la velocidad del Humanoid. Si te quedas sin estamina, dejas de correr
 -- y vuelves a correr solo cuando recuperes un poco (MINIMO_PARA_REANUDAR).
@@ -15,7 +16,7 @@ local RemotoCorrer = ReplicatedStorage.Remotes.Correr
 
 local CorrerServicio = {}
 
--- estado[jugador] = { quiere = bool, corriendo = bool, agotado = bool }
+-- estado[jugador] = { quiere = bool, corriendo = bool, agotado = bool, caminar = bool }
 local estado = {}
 
 local function humanoideVivo(jugador)
@@ -40,13 +41,23 @@ local function aplicar(jugador, corriendo)
 		if personaje:GetAttribute("Atacando") then
 			multiplicador *= 0.3 -- mientras golpeas casi no te mueves (lo marca CombateServicio)
 		end
-		humanoide.WalkSpeed = (if corriendo then Config.VELOCIDAD_CORRER else Config.VELOCIDAD_CAMINAR) * multiplicador
+		local base = if corriendo
+			then Config.VELOCIDAD_CORRER
+			elseif e.caminar then Config.VELOCIDAD_PASEO
+			else Config.VELOCIDAD_CAMINAR
+		humanoide.WalkSpeed = base * multiplicador
 		personaje:SetAttribute("Corriendo", corriendo)
+		personaje:SetAttribute("Caminando", e.caminar and not corriendo)
 	end
 end
 
-local function alPedir(jugador, quiere)
+local function alPedir(jugador, quiere, valor)
 	local e = estado[jugador]
+	if e and quiere == "Caminar" and typeof(valor) == "boolean" then
+		e.caminar = valor
+		aplicar(jugador, e.corriendo)
+		return
+	end
 	if not e or typeof(quiere) ~= "boolean" then
 		return -- nunca confiamos en datos raros del cliente
 	end
@@ -59,7 +70,7 @@ end
 
 function CorrerServicio.Iniciar()
 	local function alEntrar(jugador)
-		estado[jugador] = { quiere = false, corriendo = false, agotado = false }
+		estado[jugador] = { quiere = false, corriendo = false, agotado = false, caminar = false }
 		jugador:GetAttributeChangedSignal("MultVelocidad"):Connect(function()
 			local e = estado[jugador]
 			if e then

@@ -229,6 +229,13 @@ function Estructuras.Altar(padre)
 	local base = Vector3.new(centro2.X, alturaEn(centro2.X, centro2.Y), centro2.Y)
 	local colorPiedra = Color3.fromRGB(150, 144, 132)
 
+	-- Explanada: el altar está en la falda de la montaña, así que se allana el terreno
+	-- (se quita la tierra que sobra por arriba y se rellena por abajo) para que no quede hundido
+	local terreno = workspace.Terrain
+	terreno:FillCylinder(CFrame.new(base + Vector3.new(0, 14, 0)), 26, 24, Enum.Material.Air)
+	terreno:FillCylinder(CFrame.new(base + Vector3.new(0, -4, 0)), 9, 22, Enum.Material.Slate)
+	terreno:FillCylinder(CFrame.new(base + Vector3.new(0, -0.6, 0)), 1.6, 25, Enum.Material.Ground)
+
 	-- Plataforma circular
 	parte({
 		Name = "Plataforma",

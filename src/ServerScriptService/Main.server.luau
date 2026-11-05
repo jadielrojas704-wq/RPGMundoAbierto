@@ -22,6 +22,7 @@ local RazaServicio = require(Progresion.RazaServicio)
 local MisionesServicio = require(script.Parent.Historia.MisionesServicio)
 
 local ClimaServicio = require(script.Parent.Mundo.ClimaServicio)
+local MapaServicio = require(script.Parent.Mundo.MapaServicio)
 local NPCServicio = require(script.Parent.Mundo.NPCServicio)
 
 -- El Shift Lock de Roblox usa Shift (que aquí es esquivar): se apaga y se usa el del juego
@@ -46,6 +47,7 @@ DatosServicio.Iniciar()
 CombateServicio.Iniciar()
 EntrenamientoServicio.Iniciar()
 ClimaServicio.Iniciar()
+MapaServicio.Iniciar() -- foto del terreno para el minimapa
 NPCServicio.Iniciar()
 RazaServicio.Iniciar()
 

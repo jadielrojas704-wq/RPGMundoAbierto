@@ -457,4 +457,29 @@ function AparienciaConfig.Miniatura(id)
 	return "rbxthumb://type=Asset&id=" .. tostring(id) .. "&w=150&h=150"
 end
 
+-- ===== Animaciones de movimiento (para todos: jugadores y NPC) =====
+-- Paquete "adidas Sports" del catálogo de Roblox: grabado con captura de movimiento,
+-- es el más fluido y natural. Se ponen en la HumanoidDescription (AparienciaServicio).
+-- Para probar otro paquete, cambia los números (ver los paquetes en el catálogo de Roblox).
+AparienciaConfig.ANIMACIONES = {
+	IdleAnimation = 18538150608, -- reposo (respira, cambia el peso de pierna)
+	WalkAnimation = 18538146480, -- caminar
+	RunAnimation = 18538133604, -- correr
+	JumpAnimation = 18538153691, -- saltar
+	FallAnimation = 18538164337, -- caer
+	ClimbAnimation = 18538170170, -- trepar
+	SwimAnimation = 18538158932, -- nadar
+}
+-- Otros paquetes de Roblox, por si los quieres comparar:
+--   Rthro:  reposo 2510235063, caminar 2510242378, correr 2510238627, saltar 2510236649, caer 2510233257
+--   Knight: reposo 734327140,  caminar 734326330,  correr 734325948,  saltar 734326930,  caer 734326679
+--   Ninja:  reposo 658832408,  caminar 658831143,  correr 658830056,  saltar 658832070,  caer 658831500
+
+-- Animación de DESCANSO: cuando el personaje lleva un rato quieto (fuera de combate)
+-- se pone a descansar. Son gestos ("emotes") gratis de Roblox.
+AparienciaConfig.DESCANSO = {
+	Descanso = 5230661597, -- "Bored": suspira y cambia de postura
+	Estirarse = 3360692915, -- "Tilt": se estira de lado
+}
+
 return AparienciaConfig

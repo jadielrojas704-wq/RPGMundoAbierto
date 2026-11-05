@@ -39,6 +39,65 @@ local function pieza(padre, propiedades)
 	return p
 end
 
+-- ===== RUNAS: glifos de verdad hechos con trazos de luz (como las runas antiguas) =====
+-- Cada runa es una lista de trazos entre puntos (x de -0.3 a 0.3, y de -0.5 a 0.5).
+local GLIFOS = {
+	{ { 0, -0.5, 0, 0.5 }, { 0, 0.5, 0.3, 0.25 }, { 0, 0.2, 0.3, -0.05 } }, -- fehu
+	{ { -0.2, -0.5, -0.2, 0.5 }, { -0.2, 0.5, 0.24, 0.2 }, { 0.24, 0.2, 0.24, -0.5 } }, -- uruz
+	{ { 0, -0.5, 0, 0.5 }, { 0, 0.25, 0.26, 0 }, { 0.26, 0, 0, -0.25 } }, -- thurisaz
+	{ { 0, -0.5, 0, 0.5 }, { 0, 0.5, 0.26, 0.3 }, { 0.26, 0.3, 0, 0.1 }, { 0, 0.1, 0.28, -0.5 } }, -- raido
+	{ { 0.22, 0.5, -0.16, 0.05 }, { -0.16, 0.05, 0.22, -0.4 } }, -- kenaz
+	{ { -0.26, 0.42, 0.26, -0.42 }, { 0.26, 0.42, -0.26, -0.42 } }, -- gebo
+	{ { 0, -0.5, 0, 0.5 }, { -0.22, 0.16, 0.22, -0.16 } }, -- naudiz
+	{ { 0, -0.5, 0, 0.5 }, { 0, 0.5, -0.26, 0.2 }, { 0, 0.5, 0.26, 0.2 } }, -- tiwaz
+	{ { 0, -0.5, 0, 0.5 }, { 0, 0.05, -0.26, 0.42 }, { 0, 0.05, 0.26, 0.42 } }, -- algiz
+	{ { -0.2, 0.5, 0.2, 0.15 }, { 0.2, 0.15, -0.2, -0.15 }, { -0.2, -0.15, 0.2, -0.5 } }, -- sowilo
+	{ { 0, 0.5, 0.25, 0.15 }, { 0.25, 0.15, 0, -0.2 }, { 0, -0.2, -0.25, 0.15 }, { -0.25, 0.15, 0, 0.5 }, { 0, -0.2, -0.26, -0.5 }, { 0, -0.2, 0.26, -0.5 } }, -- othala
+	{ { -0.22, -0.5, -0.22, 0.5 }, { 0.22, -0.5, 0.22, 0.5 }, { -0.22, 0.3, 0.22, -0.3 } }, -- hagalaz
+	{ { 0, 0.5, 0.24, 0 }, { 0.24, 0, 0, -0.5 }, { 0, -0.5, -0.24, 0 }, { -0.24, 0, 0, 0.5 } }, -- ingwaz
+	{ { 0, -0.5, 0, 0.5 } }, -- isa
+}
+
+-- Una runa de alto "tam" en cf (cf mirando hacia fuera de la piedra: -Z = hacia el que la lee)
+local function runa(modelo, cf, tam, color, indice, nombre)
+	local glifo = GLIFOS[indice or aleatorio:NextInteger(1, #GLIFOS)]
+	local grosor = math.max(tam * 0.09, 0.06)
+	for _, t in glifo do
+		local a = Vector3.new(t[1] * tam, t[2] * tam, 0)
+		local b = Vector3.new(t[3] * tam, t[4] * tam, 0)
+		local largo = (b - a).Magnitude
+		local centro = (a + b) / 2
+		local angulo = math.atan2(b.Y - a.Y, b.X - a.X)
+		pieza(modelo, {
+			Name = nombre or "Runa",
+			Size = Vector3.new(largo + grosor * 0.8, grosor, 0.05),
+			CFrame = cf * CFrame.new(centro) * CFrame.Angles(0, 0, angulo),
+			Material = Enum.Material.Neon,
+			Color = color,
+			CanCollide = false,
+			CastShadow = false,
+		})
+	end
+end
+
+-- Una línea de runas de "ancho" studs (cf = centro de la línea)
+local function lineaRunas(modelo, cf, ancho, tam, color, nombre)
+	local cuantas = math.max(1, math.floor(ancho / (tam * 0.78)))
+	local paso = ancho / cuantas
+	for k = 1, cuantas do
+		runa(modelo, cf * CFrame.new(-ancho / 2 + (k - 0.5) * paso, 0, 0), tam, color, nil, nombre)
+	end
+end
+
+-- Una columna de runas de "alto" studs (cf = centro de la columna)
+local function columnaRunas(modelo, cf, alto, tam, color, nombre)
+	local cuantas = math.max(1, math.floor(alto / (tam * 1.25)))
+	local paso = alto / cuantas
+	for k = 1, cuantas do
+		runa(modelo, cf * CFrame.new(0, alto / 2 - (k - 0.5) * paso, 0), tam, color, nil, nombre)
+	end
+end
+
 -- Altura del terreno en (x, z); nil si es agua
 local function suelo(x, z)
 	local params = RaycastParams.new()
@@ -318,17 +377,7 @@ local function estela(modelo, cf, color, idTexto, material, piedraColor)
 		}
 	)
 	for linea = 1, 5 do
-		pieza(
-			modelo,
-			{
-				Name = "RunaEstela",
-				Size = Vector3.new(aleatorio:NextNumber(2.4, 3.8), 0.2, 0.08),
-				CFrame = cf * CFrame.new(0, 2 + linea * 1.1, -0.68),
-				Material = Enum.Material.Neon,
-				Color = color,
-				CanCollide = false,
-			}
-		)
+		lineaRunas(modelo, cf * CFrame.new(0, 2 + linea * 1.1, -0.68), aleatorio:NextNumber(2.6, 3.6), 0.78, color, "RunaEstela")
 	end
 	local gema = pieza(
 		modelo,
@@ -359,17 +408,8 @@ local function tablilla(modelo, cf, color, idTexto)
 			Color = Color3.fromRGB(176, 164, 140),
 		}
 	)
-	pieza(
-		modelo,
-		{
-			Name = "RunaTablilla",
-			Size = Vector3.new(1.8, 0.14, 0.06),
-			CFrame = t.CFrame * CFrame.new(0, 0.4, -0.28),
-			Material = Enum.Material.Neon,
-			Color = color,
-			CanCollide = false,
-		}
-	)
+	lineaRunas(modelo, t.CFrame * CFrame.new(0, 0.6, -0.28), 1.9, 0.5, color, "RunaTablilla")
+	lineaRunas(modelo, t.CFrame * CFrame.new(0, -0.1, -0.28), 1.5, 0.5, color, "RunaTablilla")
 	legible(t, idTexto, "Leer")
 	return t
 end
@@ -704,17 +744,7 @@ local function santuarioIgnar(modelo, base, alto, datos, color)
 				Color = Color3.fromRGB(200, 150, 70),
 			}
 		)
-		pieza(
-			modelo,
-			{
-				Name = "RunaObelisco",
-				Size = Vector3.new(0.3, 9, 0.08),
-				CFrame = ob.CFrame * CFrame.new(0, 0, -1.33),
-				Material = Enum.Material.Neon,
-				Color = color,
-				CanCollide = false,
-			}
-		)
+		columnaRunas(modelo, ob.CFrame * CFrame.new(0, 0, -1.33), 9, 0.85, color, "RunaObelisco")
 		brasero(modelo, base * g(0, i * 90, 0) * CFrame.new(0, 2.8, -9))
 	end
 	local _, enMano = estatuaGuardian(modelo, "Ignar", arriba * CFrame.new(0, 0, 5), color)
@@ -1113,13 +1143,35 @@ local function construirSello()
 		Color = Color3.fromRGB(36, 34, 40),
 	})
 	for linea = 1, 4 do
+		lineaRunas(modelo, piedraTexto.CFrame * CFrame.new(0, -2.6 + linea * 1.2, -0.62), aleatorio:NextNumber(2.4, 3.4), 0.8, color, "RunaEstela")
+	end
+	-- explanada de piedra más ancha donde van grabadas las runas
+	pieza(modelo, {
+		Name = "Explanada",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(alto + 4, 32, 32),
+		CFrame = base * CFrame.new(0, -(alto + 4) / 2 - 0.05, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		Color = Color3.fromRGB(58, 54, 64),
+		Material = Enum.Material.Slate,
+	})
+	-- círculo de runas grabadas en el suelo alrededor del sello (brillan como la grieta)
+	for k = 1, 18 do
+		local a = k / 18 * math.pi * 2
+		local cfRuna = base * CFrame.Angles(0, a, 0) * CFrame.new(0, 0.12, -13.2) * CFrame.Angles(-math.pi / 2, 0, 0)
+		runa(modelo, cfRuna, 1.5, color, (k % #GLIFOS) + 1, "RunaSello")
+	end
+	-- y un anillo fino que las une
+	for k = 1, 36 do
+		local a = k / 36 * math.pi * 2
 		pieza(modelo, {
-			Name = "RunaEstela",
-			Size = Vector3.new(aleatorio:NextNumber(2, 3.4), 0.2, 0.1),
-			CFrame = piedraTexto.CFrame * CFrame.new(0, -2.6 + linea * 1.2, -0.62),
+			Name = "AnilloSello",
+			Size = Vector3.new(2.5, 0.08, 0.16),
+			CFrame = base * CFrame.Angles(0, a, 0) * CFrame.new(0, 0.1, -14.6),
 			Material = Enum.Material.Neon,
 			Color = color,
+			Transparency = 0.25,
 			CanCollide = false,
+			CastShadow = false,
 		})
 	end
 	legible(piedraTexto, datos.texto, "Examinar la grieta")

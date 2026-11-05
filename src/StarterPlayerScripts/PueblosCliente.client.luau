@@ -18,6 +18,7 @@ local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RemoteHablar = Remotes:WaitForChild("HablarNPC")
 local RemoteBurbuja = Remotes:WaitForChild("BurbujaNPC")
 local TiendasConfig = require(ReplicatedStorage.Config:WaitForChild("TiendasConfig"))
+local Voz = require(ReplicatedStorage:WaitForChild("Interfaz"):WaitForChild("Voz"))
 
 local jugador = Players.LocalPlayer
 local pantallaJugador = jugador:WaitForChild("PlayerGui")
@@ -379,6 +380,10 @@ local function escribir(texto)
 	local mio = escribiendo
 	dialogoTexto.Text = texto
 	dialogoTexto.MaxVisibleGraphemes = 0
+	-- el NPC lo dice en voz alta, con su propia voz
+	if npcActual then
+		task.spawn(Voz.Decir, texto, Voz.PerfilNPC(npcActual), "npc")
+	end
 	local total = utf8.len(texto) or #texto
 	task.spawn(function()
 		for k = 1, total do
@@ -396,6 +401,7 @@ local function cerrarTodo()
 	dialogo.Visible = false
 	tiendaVentana.Visible = false
 	escribiendo += 1
+	Voz.Callar("npc")
 	if npcActual then
 		local boton = npcActual:FindFirstChild("Hablar", true)
 		if boton then
@@ -527,6 +533,11 @@ RemoteBurbuja.OnClientEvent:Connect(function(npc, texto, duracion)
 	local camara = Workspace.CurrentCamera
 	if not cabeza or not camara or (cabeza.Position - camara.CFrame.Position).Magnitude > 70 then
 		return
+	end
+	-- si está cerca y no estás hablando con otro, se le oye (más bajo cuanto más lejos)
+	local distancia = (cabeza.Position - camara.CFrame.Position).Magnitude
+	if distancia < 34 and not npcActual then
+		task.spawn(Voz.Decir, texto, Voz.PerfilNPC(npc), "burbuja", math.clamp(1.1 - distancia / 40, 0.25, 1))
 	end
 	local anterior = cabeza:FindFirstChild("Burbuja")
 	if anterior then
