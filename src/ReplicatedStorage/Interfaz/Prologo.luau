@@ -10,6 +10,7 @@ local Workspace = game:GetService("Workspace")
 local HistoriaConfig = require(ReplicatedStorage.Config.HistoriaConfig)
 local InicioConfig = require(ReplicatedStorage.Config.InicioConfig)
 local RegionesConfig = require(ReplicatedStorage.Config.RegionesConfig)
+local SonidosConfig = require(ReplicatedStorage.Config.SonidosConfig)
 local Cinematica = require(script.Parent.Cinematica)
 
 local Prologo = {}
@@ -66,7 +67,9 @@ local function tomas()
 		Altar = function()
 			return mirar(altar + Vector3.new(80, 45, 90), altar + Vector3.new(0, 8, 0)),
 				mirar(altar + Vector3.new(-35, 20, 50), altar + Vector3.new(0, 6, 0)),
-				55
+				55,
+				nil,
+				"Destello" -- el sacrificio de los Guardianes: relámpago blanco
 		end,
 		Eclipse = function()
 			local desde = altar + Vector3.new(0, 140, 260)
@@ -126,7 +129,12 @@ end
 function Prologo.Reproducir()
 	Cinematica.Reproducir(
 		tomas(),
-		{ titulo = string.upper(InicioConfig.NOMBRE_JUEGO), subtitulo = HistoriaConfig.ACTO }
+		{
+			titulo = string.upper(InicioConfig.NOMBRE_JUEGO),
+			subtitulo = HistoriaConfig.ACTO,
+			musica = SonidosConfig.MUSICA.Prologo,
+			volumen = 0.65,
+		}
 	)
 end
 

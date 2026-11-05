@@ -180,14 +180,19 @@ local function ambienteConClima(region, nombreRegion)
 		Density = mezcla(densidad, math.max(densidad, 0.28), magia),
 		Haze = mezcla(bruma, math.clamp(bruma, 1.2, 1.6), magia),
 		Glare = (base.Glare + atardecer * 0.6) * (1 - math.max(oscuridad, arena)) * (1 - noche),
+		-- Cielo mitológico. Color = el horizonte y el lado del sol; Decay = el lado contrario.
+		-- Día: horizonte naranja-rosado y cielo azul al otro lado.
+		-- Noche: horizonte violeta-rosa y arriba azul casi negro.
 		Color = base.Color
-			:Lerp(Color3.fromRGB(255, 196, 176), atardecer * 0.35)
-			:Lerp(Color3.fromRGB(128, 96, 198), noche * 0.8)
+			:Lerp(Color3.fromRGB(255, 186, 160), 0.45 * (1 - noche))
+			:Lerp(Color3.fromRGB(255, 150, 150), atardecer * 0.5)
+			:Lerp(Color3.fromRGB(170, 96, 205), noche * 0.85)
 			:Lerp(gris, math.max(lluvia, niebla) * 0.5)
 			:Lerp(Color3.fromRGB(205, 170, 120), arena * 0.7),
 		Decay = base.Decay
-			:Lerp(Color3.fromRGB(236, 128, 140), atardecer * 0.45)
-			:Lerp(Color3.fromRGB(78, 46, 140), noche * 0.85)
+			:Lerp(Color3.fromRGB(110, 150, 240), 0.55 * (1 - noche))
+			:Lerp(Color3.fromRGB(240, 120, 150), atardecer * 0.45)
+			:Lerp(Color3.fromRGB(22, 14, 64), noche * 0.92)
 			:Lerp(Color3.fromRGB(70, 74, 80), oscuridad * 0.6),
 	}
 	local filtro = region.color

@@ -118,12 +118,17 @@ granos.Rate = 0
 granos.Parent = suelo
 
 -- ===== SONIDOS DE AMBIENTE =====
+-- Todos van al grupo "Mundo": las cinemáticas lo bajan para que se oiga la música.
+local grupoMundo = SoundService:FindFirstChild("Mundo") or Instance.new("SoundGroup")
+grupoMundo.Name = "Mundo"
+grupoMundo.Parent = SoundService
 
 local function sonidoBucle(id)
 	local sonido = Instance.new("Sound")
 	sonido.SoundId = id
 	sonido.Looped = true
 	sonido.Volume = 0
+	sonido.SoundGroup = grupoMundo
 	sonido.Parent = SoundService
 	sonido:Play()
 	return sonido
@@ -137,6 +142,7 @@ local function sonidoSuelto(id, volumen, velocidad)
 	sonido.SoundId = id
 	sonido.Volume = volumen
 	sonido.PlaybackSpeed = velocidad or 1
+	sonido.SoundGroup = grupoMundo
 	sonido.Parent = SoundService
 	sonido:Play()
 	Debris:AddItem(sonido, 15)

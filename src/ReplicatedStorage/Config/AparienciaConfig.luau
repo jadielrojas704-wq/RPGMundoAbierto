@@ -10,7 +10,8 @@ local AparienciaConfig = {}
 
 AparienciaConfig.GENEROS = { "Hombre", "Mujer" }
 
--- Cuerpos realistas de Roblox ("Man" y "Woman")
+-- Los JUGADORES siempre tienen cuerpo blocky (decisión del usuario, 4 nov): sus partes del
+-- cuerpo se quedan en 0. Estos cuerpos realistas son para los NPC, el Custodio y las estatuas.
 AparienciaConfig.CUERPOS = {
 	Hombre = { Torso = 86500008, RightArm = 86500036, LeftArm = 86500054, LeftLeg = 86500064, RightLeg = 86500078 },
 	Mujer = { Torso = 86499666, RightArm = 86499698, LeftArm = 86499716, LeftLeg = 86499753, RightLeg = 86499793 },
@@ -61,6 +62,17 @@ AparienciaConfig.CARAS = {
 	{ nombre = "Reina de las nieves", cabeza = 133196692848803, gesto = 133285968979014 },
 	{ nombre = "Enamorada", cabeza = 96894500746180, gesto = 117538893462160 },
 	{ nombre = "Escarcha", cabeza = 120590400620706, gesto = 75052868714630 },
+	-- estilo anime
+	{ nombre = "Anime", cabeza = 16993075742, gesto = 14618207727, anime = true },
+	{ nombre = "Anime 2", cabeza = 137455697511260, gesto = 14618207727, anime = true },
+	{ nombre = "Anime 3", cabeza = 75581288616531, gesto = 14618207727, anime = true },
+	{ nombre = "Anime 4", cabeza = 118058361171785, gesto = 14618207727, anime = true },
+	{ nombre = "Chico anime", cabeza = 128807805327178, gesto = 14618207727, anime = true },
+	{ nombre = "Manga", cabeza = 120459846176613, gesto = 14618207727, anime = true },
+	{ nombre = "Chica anime", cabeza = 86162594467821, gesto = 14618207727, anime = true },
+	{ nombre = "Chica anime 2", cabeza = 121439252875925, gesto = 14618207727, anime = true },
+	{ nombre = "Chica anime 3", cabeza = 119128441301162, gesto = 14618207727, anime = true },
+	{ nombre = "Mirada de amatista", cabeza = 103850685216450, gesto = 14618207727, anime = true },
 }
 
 -- Pelos. "tipo" es el hueco del accesorio en Roblox (Hair, Face o Hat).
@@ -145,13 +157,16 @@ local TUNICA_RITUAL, CAPA_NEGRA_CAPUCHA = 82268347801802, 18431909363
 local CAPA, CAPA_REAL, CAPA_REAL2 = 13254752315, 7133208568, 96639818423994
 local CORONA, CORONA2, TIARA = 85756272104549, 14292141065, 15170399438
 local PANUELO_BEIGE, KEFIYEH, KEFIYEH_NEGRO, CASCO = 16219944268, 14230101896, 14230119361, 2493590711
+-- armaduras 3D por capas (sirven en el cuerpo blocky)
+local PLACAS_PLATA, PLACAS_NEGRAS, PLACAS_ORO, BRIGANTINA = 16100249133, 16034546959, 16077694176, 16034525842
+local GREBAS, GREBAS2 = 96926656599960, 91650174963301
 
 AparienciaConfig.ESTAMENTOS = { "Plebeyo", "Noble", "Realeza", "Caballero", "Hechicero" }
 AparienciaConfig.TEXTO_ESTAMENTO = {
 	Plebeyo = "Ropa de pueblo: campesinos, artesanos y viajeros.",
 	Noble = "Señores y damas de las cuatro culturas.",
 	Realeza = "Reyes y reinas, con corona y capa real.",
-	Caballero = "Armadura completa de caballero.",
+	Caballero = "Armaduras de placas y brigantinas.",
 	Hechicero = "Túnicas de magos, brujos y nigromantes.",
 }
 
@@ -354,15 +369,10 @@ AparienciaConfig.ROPA = {
 		{ sombrero = CORONA, espalda = CAPA_REAL }
 	),
 	-- Caballeros
-	conjunto("Paladin", "Paladín", "Caballero", nil, {}, { cuerpo = "Caballero", sombrero = CASCO, icono = CASCO }),
-	conjunto(
-		"CaballeroSinYelmo",
-		"Caballero sin yelmo",
-		"Caballero",
-		nil,
-		{},
-		{ cuerpo = "Caballero", espalda = CAPA, icono = 2493586650 }
-	),
+	conjunto("Paladin", "Paladín", "Caballero", nil, { { CAMISA_BLANCA, "Shirt" }, { GREBAS, "Pants" }, { PLACAS_PLATA, "Jacket" } }, { sombrero = CASCO }),
+	conjunto("CaballeroNegro", "Caballero negro", "Caballero", nil, { { CAMISA_NEGRA, "Shirt" }, { GREBAS2, "Pants" }, { PLACAS_NEGRAS, "Jacket" } }, { espalda = CAPA }),
+	conjunto("CaballeroOro", "Caballero dorado", "Caballero", nil, { { CAMISA_BLANCA, "Shirt" }, { GREBAS, "Pants" }, { PLACAS_ORO, "Jacket" } }, { espalda = CAPA_REAL }),
+	conjunto("Mercenario", "Mercenario", "Caballero", nil, { { CAMISA_CHALECO, "Shirt" }, { PANTALON_CUERO, "Pants" }, { BOTAS, "Pants" }, { BRIGANTINA, "Jacket" } }),
 	-- Hechiceros
 	conjunto(
 		"Mago",

@@ -34,11 +34,20 @@ filtro.Name = "ColorNoche"
 filtro.Parent = Lighting
 
 local BLANCO = Color3.new(1, 1, 1)
-local TINTE_ATARDECER = Color3.fromRGB(255, 228, 214)
-local TINTE_NOCHE = Color3.fromRGB(215, 185, 255)
+local TINTE_DIA = Color3.fromRGB(255, 246, 244) -- un rubor rosado muy suave
+local TINTE_ATARDECER = Color3.fromRGB(255, 220, 206)
+local TINTE_NOCHE = Color3.fromRGB(210, 182, 255) -- violeta
+
+-- Rayos de sol (luz divina entre las nubes)
+local rayos = Lighting:FindFirstChild("RayosMiticos") or Instance.new("SunRaysEffect")
+rayos.Name = "RayosMiticos"
+rayos.Intensity = 0.06
+rayos.Spread = 0.6
+rayos.Parent = Lighting
 
 local function actualizarFiltro(dia, atardecer, noche, nublado)
-	local tinte = BLANCO:Lerp(TINTE_ATARDECER, atardecer * 0.8):Lerp(TINTE_NOCHE, noche)
+	rayos.Intensity = (0.05 + atardecer * 0.12) * dia * (1 - nublado)
+	local tinte = TINTE_DIA:Lerp(TINTE_ATARDECER, atardecer * 0.8):Lerp(TINTE_NOCHE, noche)
 	filtro.TintColor = tinte:Lerp(BLANCO, nublado * 0.5)
 	-- Colores algo más vivos de día y al atardecer; de noche, morados intensos
 	filtro.Saturation = mezcla(0.04, mezcla(0.12, 0.16, noche), math.max(atardecer, noche)) * (1 - nublado * 0.6)
@@ -178,15 +187,95 @@ local function estrellaFugaz()
 	end)
 end
 
+-- ===== AURORAS DE NOCHE (cortinas de luz rosa, violeta y azul) =====
+-- Siguen a la cámara a lo lejos, como si estuvieran en el cielo, y ondulan despacio.
+local soporte = Instance.new("Part")
+soporte.Name = "Auroras"
+soporte.Anchored = true
+soporte.CanCollide = false
+soporte.CanQuery = false
+soporte.CanTouch = false
+soporte.Transparency = 1
+soporte.Size = Vector3.one
+soporte.Parent = Workspace
+local COLORES_AURORA = {
+	ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 120, 200)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(170, 90, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 140, 255)),
+	}),
+	ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(110, 170, 255)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 110, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 140, 200)),
+	}),
+	ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 100, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 150, 220)),
+	}),
+}
+local auroras = {}
+for i, colores in COLORES_AURORA do
+	local a0 = Instance.new("Attachment")
+	a0.Parent = soporte
+	local a1 = Instance.new("Attachment")
+	a1.Parent = soporte
+	local cortina = Instance.new("Beam")
+	cortina.Attachment0 = a0
+	cortina.Attachment1 = a1
+	cortina.Color = colores
+	cortina.LightEmission = 1
+	cortina.LightInfluence = 0
+	cortina.FaceCamera = false
+	cortina.Segments = 40
+	cortina.Width0 = 90
+	cortina.Width1 = 70
+	cortina.Transparency = NumberSequence.new(1)
+	cortina.Parent = soporte
+	table.insert(auroras, { a0 = a0, a1 = a1, beam = cortina, fase = i * 1.7, lado = (i - 2) * 260 })
+end
+local brilloAurora = 0
+local objetivoAurora = 0 -- lo pone el bucle de abajo (noche y cielo despejado)
+local function actualizarAuroras(dt)
+	brilloAurora += (objetivoAurora - brilloAurora) * math.min(1, dt * 0.5)
+	if brilloAurora < 0.01 then
+		for _, a in auroras do
+			a.beam.Enabled = false
+		end
+		return
+	end
+	local camara = Workspace.CurrentCamera
+	if not camara then
+		return
+	end
+	local centro = camara.CFrame.Position + Vector3.new(0, 380, -700)
+	local t = os.clock() * 0.08
+	for _, a in auroras do
+		a.beam.Enabled = true
+		a.a0.WorldPosition = centro + Vector3.new(a.lado - 420, 40 * math.sin(t + a.fase), -120 * math.cos(t * 0.7 + a.fase))
+		a.a1.WorldPosition = centro + Vector3.new(a.lado + 420, 40 * math.cos(t * 1.3 + a.fase), 120 * math.sin(t * 0.9 + a.fase))
+		a.beam.CurveSize0 = 220 * math.sin(t * 1.1 + a.fase)
+		a.beam.CurveSize1 = -220 * math.cos(t * 0.8 + a.fase)
+		local alfa = 1 - 0.55 * brilloAurora
+		a.beam.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.25, alfa),
+			NumberSequenceKeypoint.new(0.75, alfa),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+	end
+end
+
 -- ===== BUCLE =====
 local regionActual = "Bosque"
 local proximaFugaz = os.clock() + rng:NextNumber(15, 40)
 
-RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function(dt)
 	local camara = Workspace.CurrentCamera
 	if camara then
 		caja.CFrame = CFrame.new(camara.CFrame.Position + Vector3.new(0, 2, 0))
 	end
+	actualizarAuroras(dt)
 end)
 
 while true do
@@ -194,6 +283,7 @@ while true do
 	local clima = ClimaConfig.CLIMAS[Workspace:GetAttribute("Clima") or "Despejado"] or ClimaConfig.CLIMAS.Despejado
 	local nublado = math.clamp(clima.oscuridad * 1.6 + clima.precipitacion * 0.5, 0, 1)
 	actualizarFiltro(dia, atardecer, noche, nublado)
+	objetivoAurora = noche * (1 - nublado)
 
 	local personaje = jugador.Character
 	local raiz = personaje and personaje:FindFirstChild("HumanoidRootPart")

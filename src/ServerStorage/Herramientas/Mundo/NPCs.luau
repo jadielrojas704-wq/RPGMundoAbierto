@@ -36,6 +36,38 @@ local CUERPO = {
 }
 local CASCO_GUARDIA = "2493590711"
 
+-- ===== CARAS (cabezas realistas que gesticulan: humanas y de estilo anime) =====
+-- { cabeza, gesto }. Más o menos 3 de cada 10 NPC tienen cara de anime.
+local GESTO_ANIME = 14618207727
+local CARAS = {
+	Hombre = {
+		{ 10725826963, 10725833199 },
+		{ 11180212350, 11180270363 },
+		{ 11163789916, 11163856931 },
+		{ 12954264879, 12954268123 },
+		{ 13692975981, 13692973305 },
+		{ 128202565043011, 123330892729033 },
+		{ 73697371296507, 102106667157830 },
+		{ 75853796532602, 129306210206691 },
+		{ 79029537488886, 129812951799208 },
+		{ 74295716469720, 101654090668842 },
+		{ 74785198633210, 112600527789051 },
+		{ 96229607001945, 132110660061380 },
+	},
+	Mujer = {
+		{ 10725626210, 10725638029 },
+		{ 118329081640597, 78343337775421 },
+		{ 133196692848803, 133285968979014 },
+		{ 96894500746180, 117538893462160 },
+		{ 79654074199621, 90050254054804 },
+		{ 122186149619860, 73965504683643 },
+	},
+}
+local CARAS_ANIME = {
+	Hombre = { 16993075742, 137455697511260, 75581288616531, 118058361171785, 128807805327178, 120459846176613 },
+	Mujer = { 86162594467821, 121439252875925, 119128441301162, 103850685216450, 75581288616531 },
+}
+
 local PIEL = {
 	Reino = { Color3.fromRGB(234, 192, 160), Color3.fromRGB(214, 170, 136), Color3.fromRGB(196, 146, 112), Color3.fromRGB(150, 104, 76) },
 	Sol = { Color3.fromRGB(198, 148, 106), Color3.fromRGB(172, 122, 84), Color3.fromRGB(144, 100, 68), Color3.fromRGB(112, 76, 52) },
@@ -270,6 +302,17 @@ function NPCs.Crear(padre, datos)
 	end
 	for _, parte in { "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor", "LeftLegColor", "RightLegColor" } do
 		descripcion[parte] = piel
+	end
+	-- una cara distinta para cada NPC (humana o de anime)
+	if not esGuardia then
+		if rng:NextNumber() < 0.3 then
+			descripcion.Head = elegir(CARAS_ANIME[genero])
+			descripcion.MoodAnimation = GESTO_ANIME
+		else
+			local cara = elegir(CARAS[genero])
+			descripcion.Head = cara[1]
+			descripcion.MoodAnimation = cara[2]
+		end
 	end
 	-- un poco de variedad de altura y complexión
 	descripcion.HeightScale = rng:NextNumber(0.96, 1.06)

@@ -7,16 +7,24 @@
 --       { desde = CFrame, hasta = CFrame, duracion = 6, texto = "...", fov = 60, efecto = "Temblor",
 --         preparar = function() end },  -- preparar: se llama justo antes de la toma (con la pantalla negra)
 --       ...
---   }, { titulo = "EL ECLIPSE ETERNO", subtitulo = "..." })   -- espera hasta que acaba
--- Mientras dura, el personaje no se puede mover.
+--   }, { titulo = "EL ECLIPSE ETERNO", subtitulo = "...", musica = SonidosConfig.MUSICA.Prologo })
+-- (espera hasta que acaba). Mientras dura, el personaje no se puede mover.
+-- Efectos de cada toma: "Temblor" (la tierra tiembla), "Eclipse" (rugido y luz violeta),
+-- "Destello" (relámpago blanco). Cada cinemática lleva su música, un coro de fondo,
+-- ráfagas de viento en los cortes, brasas doradas flotando y un golpe épico en el título.
 
 local ContextActionService = game:GetService("ContextActionService")
+local Debris = game:GetService("Debris")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+
+local SonidosConfig = require(ReplicatedStorage.Config.SonidosConfig)
 
 local Cinematica = {}
 
@@ -51,6 +59,101 @@ local TECLAS_BLOQUEADAS = {
 }
 
 local reproduciendo = false
+
+-- ===== SONIDO =====
+-- Sonido de pantalla (no sale de ningún sitio concreto): se borra solo al acabar
+local function sonar(id, volumen, velocidad, duracionMax)
+	if not id then
+		return nil
+	end
+	local s = Instance.new("Sound")
+	s.SoundId = id
+	s.Volume = volumen or 0.5
+	s.PlaybackSpeed = velocidad or 1
+	s.Parent = SoundService
+	s:Play()
+	Debris:AddItem(s, duracionMax or 30)
+	return s
+end
+
+-- Pista larga que entra y sale con fundido
+local function pista(id, volumen, bucle)
+	if not id then
+		return nil
+	end
+	local s = Instance.new("Sound")
+	s.Name = "MusicaCinematica"
+	s.SoundId = id
+	s.Volume = 0
+	s.Looped = bucle == true
+	s.Parent = SoundService
+	s:Play()
+	tween(s, 2.5, { Volume = volumen })
+	return s
+end
+
+local function apagar(s, tiempo)
+	if s and s.Parent then
+		tween(s, tiempo, { Volume = 0 })
+		Debris:AddItem(s, tiempo + 0.2)
+	end
+end
+
+-- Baja los sonidos del mundo (ambiente, lluvia...) mientras dura la escena
+local function bajarMundo(activo)
+	pcall(function()
+		local grupo = SoundService:FindFirstChild("Mundo") or Instance.new("SoundGroup")
+		grupo.Name = "Mundo"
+		grupo.Parent = SoundService
+		tween(grupo, 1.5, { Volume = if activo then 0.25 else 1 })
+	end)
+end
+
+-- ===== BRASAS DORADAS que suben flotando por la pantalla =====
+local function brasas(pantalla)
+	local capa = Instance.new("Frame")
+	capa.Name = "Brasas"
+	capa.Size = UDim2.fromScale(1, 1)
+	capa.BackgroundTransparency = 1
+	capa.ZIndex = 3
+	capa.Parent = pantalla
+	local rng = Random.new()
+	local vivo = true
+	task.spawn(function()
+		while vivo and capa.Parent do
+			local b = Instance.new("Frame")
+			local tam = rng:NextInteger(2, 6)
+			b.Size = UDim2.fromOffset(tam, tam)
+			b.AnchorPoint = Vector2.new(0.5, 0.5)
+			b.Position = UDim2.fromScale(rng:NextNumber(0, 1), rng:NextNumber(0.85, 1.05))
+			b.BackgroundColor3 = if rng:NextNumber() < 0.75
+				then Color3.fromRGB(255, rng:NextInteger(150, 205), 90)
+				else Color3.fromRGB(205, 160, 255)
+			b.BackgroundTransparency = 1
+			b.BorderSizePixel = 0
+			b.ZIndex = 3
+			local r = Instance.new("UICorner")
+			r.CornerRadius = UDim.new(1, 0)
+			r.Parent = b
+			b.Parent = capa
+			local vida = rng:NextNumber(4, 8)
+			local x = b.Position.X.Scale + rng:NextNumber(-0.08, 0.08)
+			tween(b, 0.8, { BackgroundTransparency = rng:NextNumber(0.1, 0.5) })
+			tween(b, vida, { Position = UDim2.fromScale(x, rng:NextNumber(0.25, 0.6)) }, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			task.delay(vida - 1.2, function()
+				if b.Parent then
+					tween(b, 1.2, { BackgroundTransparency = 1 })
+				end
+			end)
+			Debris:AddItem(b, vida + 0.2)
+			task.wait(rng:NextNumber(0.12, 0.3))
+		end
+	end)
+	return function()
+		vivo = false
+		Debris:AddItem(capa, 1.5)
+	end
+end
 
 -- Esconde (o vuelve a enseñar) el chat y la lista de jugadores de Roblox
 local function interfazRoblox(visible)
@@ -122,6 +225,36 @@ function Cinematica.Reproducir(tomas, opciones)
 	negro.ZIndex = 5
 	negro.Parent = pantalla
 
+	-- destello (relámpago / flash del título)
+	local destello = Instance.new("Frame")
+	destello.Size = UDim2.fromScale(1, 1)
+	destello.BackgroundColor3 = Color3.new(1, 1, 1)
+	destello.BackgroundTransparency = 1
+	destello.BorderSizePixel = 0
+	destello.ZIndex = 9
+	destello.Parent = pantalla
+	local function flash(color, fuerza, tiempo)
+		destello.BackgroundColor3 = color or Color3.new(1, 1, 1)
+		destello.BackgroundTransparency = 1 - (fuerza or 0.7)
+		tween(destello, tiempo or 0.9, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	end
+
+	-- viñeta: bordes oscuros que centran la mirada
+	local vineta = Instance.new("Frame")
+	vineta.Size = UDim2.fromScale(1, 1)
+	vineta.BackgroundColor3 = Color3.new(0, 0, 0)
+	vineta.BorderSizePixel = 0
+	vineta.ZIndex = 1
+	vineta.Parent = pantalla
+	local degradadoVineta = Instance.new("UIGradient")
+	degradadoVineta.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.35),
+		NumberSequenceKeypoint.new(0.22, 1),
+		NumberSequenceKeypoint.new(0.78, 1),
+		NumberSequenceKeypoint.new(1, 0.35),
+	})
+	degradadoVineta.Parent = vineta
+
 	local subtitulo = Instance.new("TextLabel")
 	subtitulo.AnchorPoint = Vector2.new(0.5, 1)
 	subtitulo.Position = UDim2.new(0.5, 0, 1, -24)
@@ -171,6 +304,19 @@ function Cinematica.Reproducir(tomas, opciones)
 	correccion.Contrast = 0.08
 	correccion.Saturation = -0.1
 	correccion.Parent = Lighting
+	local brillo = Instance.new("BloomEffect")
+	brillo.Name = "CinematicaBrillo"
+	brillo.Intensity = 0.55
+	brillo.Size = 32
+	brillo.Threshold = 1.4
+	brillo.Parent = Lighting
+
+	-- ===== música y ambiente =====
+	bajarMundo(true)
+	local musica = pista(opciones.musica or SonidosConfig.MUSICA.Prologo, opciones.volumen or 0.6, true)
+	local coro = pista(SonidosConfig.CINE.Coro, 0.22, true)
+	sonar(SonidosConfig.CINE.Zumbido, 0.4, 0.8, 12)
+	local pararBrasas = brasas(pantalla)
 
 	-- ===== tomas =====
 	camara.CameraType = Enum.CameraType.Scriptable
@@ -185,6 +331,7 @@ function Cinematica.Reproducir(tomas, opciones)
 		camara.CFrame = toma.desde
 		if i > 1 then
 			tween(negro, 0.45, { BackgroundTransparency = 1 })
+			sonar(SonidosConfig.CINE.Corte, 0.3, 1, 8) -- ráfaga de viento en el corte
 		end
 		-- texto
 		subtitulo.Text = toma.texto or ""
@@ -196,6 +343,20 @@ function Cinematica.Reproducir(tomas, opciones)
 		if toma.efecto == "Eclipse" or temblando then
 			correccion.TintColor = Color3.fromRGB(220, 190, 255)
 			tween(correccion, duracion, { TintColor = Color3.new(1, 1, 1) })
+		end
+		if toma.efecto == "Eclipse" then
+			sonar(SonidosConfig.CINE.Eclipse, 0.7, 0.85, 15)
+			flash(Color3.fromRGB(190, 120, 255), 0.55, 1.6)
+			brillo.Intensity = 1.4
+			tween(brillo, duracion, { Intensity = 0.55 })
+		elseif temblando then
+			sonar(SonidosConfig.CINE.Golpe, 0.55, 0.7, 12)
+		elseif toma.efecto == "Destello" then
+			sonar(SonidosConfig.CINE.Golpe, 0.7, 1, 12)
+			flash(Color3.new(1, 1, 1), 0.85, 0.7)
+		end
+		if toma.sonido then
+			sonar(toma.sonido, toma.volumenSonido or 0.6, 1, 20)
 		end
 		while os.clock() - inicio < duracion and not saltado do
 			local x = suave(math.clamp((os.clock() - inicio) / duracion, 0, 1))
@@ -248,6 +409,8 @@ function Cinematica.Reproducir(tomas, opciones)
 		sub.TextSize = 22
 		sub.Text = opciones.subtitulo or ""
 		sub.Parent = pantalla
+		sonar(SonidosConfig.CINE.Golpe, 0.9, 0.85, 12) -- golpe épico del título
+		flash(Color3.fromRGB(255, 236, 200), 0.9, 1.4)
 		tween(titulo, 1.4, { TextTransparency = 0 })
 		tween(sub, 1.8, { TextTransparency = 0.2 })
 		local espera = os.clock()
@@ -263,7 +426,12 @@ function Cinematica.Reproducir(tomas, opciones)
 	-- ===== volver al juego =====
 	conexionTecla:Disconnect()
 	ContextActionService:UnbindAction("BloqueoCinematica")
+	pararBrasas()
+	apagar(musica, 2)
+	apagar(coro, 2)
+	bajarMundo(false)
 	correccion:Destroy()
+	brillo:Destroy()
 	camara.CameraType = Enum.CameraType.Custom
 	camara.FieldOfView = fovAntes
 	local personaje = jugador.Character

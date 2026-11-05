@@ -87,22 +87,24 @@ end
 
 -- Paleta del cielo según la hora. El juego es realista pero con un toque de fantasía:
 -- atardeceres rosados y dorados, y noches de luna color lavanda/morado.
+-- Paleta MITOLÓGICA (pedida por el usuario el 4 nov):
+--   día: azul, naranja y rosa · noche: azul, rosa, violeta y negro
 local PALETA = {
 	-- luz ambiente de exteriores (lo que ilumina las sombras)
-	ambienteDia = Color3.fromRGB(140, 128, 110),
-	ambienteAtardecer = Color3.fromRGB(165, 118, 132),
-	ambienteNoche = Color3.fromRGB(120, 88, 190),
+	ambienteDia = Color3.fromRGB(150, 132, 140), -- sombras con un toque rosado
+	ambienteAtardecer = Color3.fromRGB(190, 120, 128),
+	ambienteNoche = Color3.fromRGB(96, 74, 170), -- violeta
 	-- luz ambiente de interiores
-	interiorDia = Color3.fromRGB(70, 62, 55),
-	interiorNoche = Color3.fromRGB(52, 38, 92),
+	interiorDia = Color3.fromRGB(74, 62, 62),
+	interiorNoche = Color3.fromRGB(46, 32, 88),
 	-- color de la luz del sol / de la luna
-	solDia = Color3.fromRGB(255, 242, 222),
-	solAtardecer = Color3.fromRGB(255, 150, 105),
-	luna = Color3.fromRGB(176, 150, 255),
+	solDia = Color3.fromRGB(255, 232, 205), -- sol dorado
+	solAtardecer = Color3.fromRGB(255, 136, 96), -- naranja intenso
+	luna = Color3.fromRGB(205, 160, 255), -- luna rosa-lavanda
 	-- nubes
-	nubesDia = Color3.fromRGB(255, 249, 242),
-	nubesAtardecer = Color3.fromRGB(255, 168, 150),
-	nubesNoche = Color3.fromRGB(118, 92, 172),
+	nubesDia = Color3.fromRGB(255, 236, 234), -- blancas con un rubor rosa
+	nubesAtardecer = Color3.fromRGB(255, 150, 140), -- rosa y coral
+	nubesNoche = Color3.fromRGB(150, 96, 176), -- violeta rosado
 	nubesTormenta = Color3.fromRGB(78, 80, 92),
 }
 

@@ -249,7 +249,7 @@ local function crearCustodio()
 		Barba = 3,
 		Ropa = "Encapuchado",
 		Altura = 1.02,
-	})
+	}, true) -- cuerpo humano realista (es un NPC)
 	local ok, modelo = pcall(function()
 		return Players:CreateHumanoidModelFromDescription(descripcion, Enum.HumanoidRigType.R15)
 	end)

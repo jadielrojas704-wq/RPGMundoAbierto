@@ -23,16 +23,19 @@ local pendientes = {} -- [jugador] = true si hay que volver a vestirlo
 local vistiendo = {} -- [jugador] = true mientras se aplica
 
 -- Crea la HumanoidDescription completa a partir de la apariencia guardada
-function AparienciaServicio.Descripcion(apariencia)
+-- humano = true: cuerpo realista (NPC, Custodio, estatuas). Los jugadores siempre son blocky.
+function AparienciaServicio.Descripcion(apariencia, humano)
 	local a = apariencia or AparienciaConfig.PorDefecto()
 	local genero = if a.Genero == "Mujer" then "Mujer" else "Hombre"
 	local ropa = AparienciaConfig.ROPA_POR_ID[a.Ropa] or AparienciaConfig.ROPA[1]
 	local descripcion = Instance.new("HumanoidDescription")
 
-	-- cuerpo (o la armadura entera del caballero)
-	local cuerpo = AparienciaConfig.CUERPOS[ropa.cuerpo or genero] or AparienciaConfig.CUERPOS.Hombre
-	for parte, id in cuerpo do
-		descripcion[parte] = id
+	-- cuerpo: blocky para los jugadores (partes en 0); realista para los NPC
+	if humano then
+		local cuerpo = AparienciaConfig.CUERPOS[genero] or AparienciaConfig.CUERPOS.Hombre
+		for parte, id in cuerpo do
+			descripcion[parte] = id
+		end
 	end
 
 	-- cara: cabeza realista que gesticula

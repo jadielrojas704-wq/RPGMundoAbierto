@@ -1,16 +1,20 @@
 -- Construye en el mundo los SANTUARIOS de los Guardianes y la GRIETA DEL SELLO del Eclipse.
 -- SOLO servidor. Ruta en Studio: ServerScriptService/Historia/RuinasServicio
 -- Se construyen al arrancar el servidor (no hace falta regenerar el mundo), en
--- Workspace/Historia. Cada santuario tiene:
---   * plataforma de piedra rota, columnas caídas y la estatua del Guardián
---   * una ESTELA con runas que brillan del color del Guardián (se lee con G)
---   * una TABLILLA pequeña con otro texto
+-- Workspace/Historia. Cada santuario tiene su propia arquitectura:
+--   * Sylvaris (Vida): arboleda sagrada con arcos de musgo, estanque y flores
+--   * Ignar (Fuego): templo escalonado de arenisca, obeliscos, braseros y grietas de lava
+--   * Morvak (Muerte): cementerio gótico con lápidas, velas moradas y niebla
+--   * Lunaria (Luz): templo redondo de mármol, cristales y un haz de luz del cielo
+-- y todos: la ESTATUA del Guardián (cuerpo humano real en piedra, con su pose y su objeto),
+-- una ESTELA con runas (se lee con G) y una TABLILLA con otro texto.
 -- Los textos están en ReplicatedStorage/Config/HistoriaConfig.TEXTOS.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local HistoriaConfig = require(ReplicatedStorage.Config.HistoriaConfig)
+local Escultor = require(script.Parent.Escultor)
 
 local RuinasServicio = {}
 
@@ -19,7 +23,6 @@ local alLeer = nil -- función(jugador, idTexto) que pone MisionesServicio
 
 local PIEDRA = Color3.fromRGB(128, 124, 116)
 local PIEDRA_OSCURA = Color3.fromRGB(70, 68, 66)
-local MARMOL = Color3.fromRGB(214, 208, 196)
 local aleatorio = Random.new(777)
 
 local function pieza(padre, propiedades)
@@ -150,205 +153,877 @@ local function luz(parte, color, alcance, brillo)
 	return l
 end
 
--- ===== Santuario de un Guardián =====
-local function construirSantuario(datos)
-	local guardian = HistoriaConfig.GUARDIANES[datos.guardian]
-	local color = guardian.color
-	local centro, minimo, maximo = buscarSitio(datos.posicion.X, datos.posicion.Y, 18)
-	despejar(centro, 30)
-	local modelo = Instance.new("Model")
-	modelo.Name = datos.nombre
-	modelo:SetAttribute("Santuario", datos.id)
-	modelo.ModelStreamingMode = Enum.ModelStreamingMode.Atomic -- llega entero al jugador
-	modelo:SetAttribute("Guardian", guardian.nombre)
-	modelo.Parent = carpeta
+-- ===== Santuarios de los Guardianes =====
+-- Cada uno con arquitectura propia y la estatua de su Guardián (cuerpo humano real
+-- convertido en piedra por ServerScriptService/Historia/Escultor).
 
-	local alto = (maximo - minimo) + 3
-	local arriba = centro.Y + 0.8
-	local base = CFrame.new(centro.X, arriba, centro.Z) * CFrame.Angles(0, aleatorio:NextNumber(0, math.pi * 2), 0)
+local function g(x, y, z)
+	return CFrame.Angles(math.rad(x or 0), math.rad(y or 0), math.rad(z or 0))
+end
 
-	-- plataforma con escalón (llega hasta el suelo más bajo)
-	pieza(modelo, {
-		Name = "Plataforma",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(alto, 34, 34),
-		CFrame = base * CFrame.new(0, -alto / 2, 0) * CFrame.Angles(0, 0, math.pi / 2),
-	})
-	pieza(modelo, {
-		Name = "Escalon",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(alto - 0.8, 39, 39),
-		CFrame = base * CFrame.new(0, -alto / 2 - 0.4, 0) * CFrame.Angles(0, 0, math.pi / 2),
-		Material = Enum.Material.Cobblestone,
-		Color = PIEDRA_OSCURA,
-	})
-	-- círculo de runas en el suelo
-	local circulo = pieza(modelo, {
-		Name = "CirculoRunas",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.1, 15, 15),
-		CFrame = base * CFrame.new(0, 0.05, 0) * CFrame.Angles(0, 0, math.pi / 2),
-		Material = Enum.Material.Neon,
-		Color = color,
-		Transparency = 0.82,
-		CanCollide = false,
-	})
-	for i = 1, 12 do
-		local a = i * math.pi / 6
+-- Rocas sueltas y escombros alrededor (dan realismo)
+local function escombros(modelo, base, radio, cantidad, color, material)
+	for _ = 1, cantidad do
+		local a = aleatorio:NextNumber(0, math.pi * 2)
+		local r = aleatorio:NextNumber(radio * 0.6, radio)
+		local t = aleatorio:NextNumber(0.6, 2.2)
 		pieza(modelo, {
-			Name = "Runa",
-			Size = Vector3.new(0.5, 0.12, 1.4),
-			CFrame = base * CFrame.Angles(0, a, 0) * CFrame.new(0, 0.08, -8.6),
-			Material = Enum.Material.Neon,
-			Color = color,
+			Name = "Escombro",
+			Size = Vector3.new(t * aleatorio:NextNumber(0.8, 1.6), t * 0.7, t),
+			CFrame = base
+				* CFrame.new(math.cos(a) * r, t * 0.25, math.sin(a) * r)
+				* g(aleatorio:NextNumber(-25, 25), aleatorio:NextNumber(0, 360), aleatorio:NextNumber(-25, 25)),
+			Material = material or Enum.Material.Rock,
+			Color = (color or PIEDRA):Lerp(Color3.new(0, 0, 0), aleatorio:NextNumber(0, 0.2)),
+		})
+	end
+end
+
+-- Musgo encima de una pieza
+local function musgo(modelo, parte, cantidad)
+	for _ = 1, cantidad or 2 do
+		local x = aleatorio:NextNumber(-0.4, 0.4) * parte.Size.X
+		local z = aleatorio:NextNumber(-0.4, 0.4) * parte.Size.Z
+		pieza(modelo, {
+			Name = "Musgo",
+			Size = Vector3.new(aleatorio:NextNumber(1, 2.4), 0.12, aleatorio:NextNumber(1, 2.4)),
+			CFrame = parte.CFrame * CFrame.new(x, parte.Size.Y / 2 + 0.04, z) * g(0, aleatorio:NextNumber(0, 360), 0),
+			Material = Enum.Material.Grass,
+			Color = Color3.fromRGB(78, 104, 56),
 			CanCollide = false,
 		})
 	end
-	motas(circulo, color, 5)
+end
 
-	-- columnas (algunas rotas, dos caídas)
-	for i = 1, 8 do
-		local a = i * math.pi / 4 + math.pi / 8
-		local cfColumna = base * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, -13.5)
-		if i == 3 or i == 6 then
-			-- columna caída en el suelo
-			pieza(modelo, {
-				Name = "ColumnaCaida",
-				Size = Vector3.new(2.4, 2.4, 11),
-				CFrame = cfColumna
-					* CFrame.new(3, 1.2, -2)
-					* CFrame.Angles(0, math.rad(aleatorio:NextNumber(20, 70)), math.rad(aleatorio:NextNumber(-8, 8))),
-			})
-			pieza(
+-- Columna de varios tambores (más realista que un bloque): base, fuste, capitel
+local function columna(modelo, cf, alto, grosor, material, color, rota)
+	pieza(
+		modelo,
+		{
+			Name = "BaseColumna",
+			Size = Vector3.new(grosor * 1.4, 0.8, grosor * 1.4),
+			CFrame = cf * CFrame.new(0, 0.4, 0),
+			Material = material,
+			Color = color,
+		}
+	)
+	local tambores = math.max(1, math.floor(alto / 3))
+	local altoTambor = alto / tambores
+	local ultimo = tambores
+	if rota then
+		ultimo = math.max(1, tambores - aleatorio:NextInteger(1, math.max(1, tambores - 1)))
+	end
+	for i = 1, ultimo do
+		pieza(modelo, {
+			Name = "Fuste",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(altoTambor - 0.05, grosor, grosor),
+			CFrame = cf
+				* CFrame.new(aleatorio:NextNumber(-0.05, 0.05), 0.8 + (i - 0.5) * altoTambor, 0)
+				* g(0, aleatorio:NextNumber(0, 360), 90),
+			Material = material,
+			Color = color:Lerp(Color3.new(0, 0, 0), aleatorio:NextNumber(0, 0.12)),
+		})
+	end
+	if ultimo == tambores then
+		pieza(
+			modelo,
+			{
+				Name = "Capitel",
+				Size = Vector3.new(grosor * 1.5, 0.9, grosor * 1.5),
+				CFrame = cf * CFrame.new(0, 0.8 + alto + 0.45, 0),
+				Material = material,
+				Color = color,
+			}
+		)
+	else
+		-- el trozo que se cayó, en el suelo
+		pieza(modelo, {
+			Name = "TamborCaido",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(altoTambor, grosor, grosor),
+			CFrame = cf
+				* CFrame.new(aleatorio:NextNumber(2, 4), grosor / 2, aleatorio:NextNumber(-2, 2))
+				* g(0, aleatorio:NextNumber(0, 360), 0),
+			Material = material,
+			Color = color,
+		})
+	end
+end
+
+local function brasero(modelo, cf, color)
+	pieza(
+		modelo,
+		{
+			Name = "PieBrasero",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(3.2, 0.9, 0.9),
+			CFrame = cf * CFrame.new(0, 1.6, 0) * g(0, 0, 90),
+			Material = Enum.Material.Metal,
+			Color = Color3.fromRGB(60, 50, 42),
+		}
+	)
+	local cuenco = pieza(
+		modelo,
+		{
+			Name = "Brasero",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.9, 2.6, 2.6),
+			CFrame = cf * CFrame.new(0, 3.5, 0) * g(0, 0, 90),
+			Material = Enum.Material.Metal,
+			Color = Color3.fromRGB(70, 56, 44),
+		}
+	)
+	local brasas = pieza(
+		modelo,
+		{
+			Name = "Brasas",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.2, 2.1, 2.1),
+			CFrame = cf * CFrame.new(0, 3.95, 0) * g(0, 0, 90),
+			Material = Enum.Material.Neon,
+			Color = Color3.fromRGB(255, 120, 40),
+			CanCollide = false,
+		}
+	)
+	local fuego = Instance.new("Fire")
+	fuego.Size = 6
+	fuego.Heat = 9
+	fuego.Color = color or Color3.fromRGB(255, 140, 50)
+	fuego.SecondaryColor = Color3.fromRGB(255, 60, 20)
+	fuego.Parent = brasas
+	luz(brasas, Color3.fromRGB(255, 150, 70), 22, 2)
+	return cuenco
+end
+
+local function estela(modelo, cf, color, idTexto, material, piedraColor)
+	local e = pieza(
+		modelo,
+		{
+			Name = "Estela",
+			Size = Vector3.new(5, 8.5, 1.3),
+			CFrame = cf * CFrame.new(0, 4.25, 0),
+			Material = material or Enum.Material.Basalt,
+			Color = piedraColor or Color3.fromRGB(46, 46, 52),
+		}
+	)
+	pieza(
+		modelo,
+		{
+			Name = "Remate",
+			Size = Vector3.new(5.6, 0.8, 1.7),
+			CFrame = cf * CFrame.new(0, 8.9, 0),
+			Material = material or Enum.Material.Basalt,
+			Color = piedraColor or Color3.fromRGB(46, 46, 52),
+		}
+	)
+	for linea = 1, 5 do
+		pieza(
+			modelo,
+			{
+				Name = "RunaEstela",
+				Size = Vector3.new(aleatorio:NextNumber(2.4, 3.8), 0.2, 0.08),
+				CFrame = cf * CFrame.new(0, 2 + linea * 1.1, -0.68),
+				Material = Enum.Material.Neon,
+				Color = color,
+				CanCollide = false,
+			}
+		)
+	end
+	local gema = pieza(
+		modelo,
+		{
+			Name = "Gema",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one,
+			CFrame = cf * CFrame.new(0, 9.8, 0),
+			Material = Enum.Material.Neon,
+			Color = color,
+			CanCollide = false,
+		}
+	)
+	luz(gema, color, 18, 1.6)
+	motas(gema, color, 3)
+	legible(e, idTexto, "Leer inscripción")
+	return e
+end
+
+local function tablilla(modelo, cf, color, idTexto)
+	local t = pieza(
+		modelo,
+		{
+			Name = "Tablilla",
+			Size = Vector3.new(2.6, 3.2, 0.5),
+			CFrame = cf * CFrame.new(0, 1.5, 0) * g(-18, 0, 0),
+			Material = Enum.Material.Limestone,
+			Color = Color3.fromRGB(176, 164, 140),
+		}
+	)
+	pieza(
+		modelo,
+		{
+			Name = "RunaTablilla",
+			Size = Vector3.new(1.8, 0.14, 0.06),
+			CFrame = t.CFrame * CFrame.new(0, 0.4, -0.28),
+			Material = Enum.Material.Neon,
+			Color = color,
+			CanCollide = false,
+		}
+	)
+	legible(t, idTexto, "Leer")
+	return t
+end
+
+-- Plataforma que llega hasta el suelo más bajo (para que no flote en pendientes)
+local function plataforma(modelo, base, alto, ancho, forma, material, color)
+	if forma == "Cuadrada" then
+		return pieza(
+			modelo,
+			{
+				Name = "Plataforma",
+				Size = Vector3.new(ancho, alto, ancho),
+				CFrame = base * CFrame.new(0, -alto / 2, 0),
+				Material = material,
+				Color = color,
+			}
+		)
+	end
+	return pieza(
+		modelo,
+		{
+			Name = "Plataforma",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(alto, ancho, ancho),
+			CFrame = base * CFrame.new(0, -alto / 2, 0) * g(0, 0, 90),
+			Material = material,
+			Color = color,
+		}
+	)
+end
+
+-- ===== Poses de las estatuas (mismo convenio que las animaciones de combate) =====
+local POSES = {
+	-- Ignar: guerrero con la espada de fuego en alto
+	Ignar = {
+		RightShoulder = g(165, 0, 8),
+		RightElbow = g(12),
+		LeftShoulder = g(35, 0, -25),
+		LeftElbow = g(75),
+		Waist = g(-4, 12, 0),
+		Neck = g(12, -10, 0),
+		LeftHip = g(22, 0, -6),
+		LeftKnee = g(-22),
+		RightHip = g(-12, 0, 6),
+	},
+	-- Lunaria: alza un orbe de luz hacia el cielo con las dos manos
+	Lunaria = {
+		RightShoulder = g(155, 0, 18),
+		LeftShoulder = g(155, 0, -18),
+		RightElbow = g(28),
+		LeftElbow = g(28),
+		Neck = g(24, 0, 0),
+		Waist = g(6, 0, 0),
+	},
+	-- Morvak: encapuchado, cabeza baja, apoyado en su guadaña
+	Morvak = {
+		RightShoulder = g(42, 0, 12),
+		RightElbow = g(72),
+		LeftShoulder = g(8, 0, -6),
+		LeftElbow = g(10),
+		Neck = g(-18, 0, 0),
+		Waist = g(-6, -8, 0),
+	},
+	-- Sylvaris: brazos abiertos, acogiendo la vida
+	Sylvaris = {
+		RightShoulder = g(30, 0, 62),
+		LeftShoulder = g(30, 0, -62),
+		RightElbow = g(18),
+		LeftElbow = g(18),
+		Neck = g(10, 0, 0),
+		LeftHip = g(8, 0, -3),
+	},
+}
+
+local ESTATUAS = {
+	Ignar = {
+		apariencia = { Genero = "Hombre", Cara = 8, Pelo = 4, Barba = 1, Ropa = "CaballeroOro" },
+		material = Enum.Material.Sandstone,
+		color = Color3.fromRGB(214, 176, 128),
+	},
+	Lunaria = {
+		apariencia = { Genero = "Mujer", Cara = 17, Pelo = 18, Ropa = "Reina" },
+		material = Enum.Material.Marble,
+		color = Color3.fromRGB(242, 240, 234),
+	},
+	Morvak = {
+		apariencia = { Genero = "Hombre", Cara = 13, Pelo = 0, Barba = 0, Ropa = "Encapuchado" },
+		material = Enum.Material.Basalt,
+		color = Color3.fromRGB(66, 62, 74),
+	},
+	Sylvaris = {
+		apariencia = { Genero = "Mujer", Cara = 16, Pelo = 22, Ropa = "Dama" },
+		material = Enum.Material.Marble,
+		color = Color3.fromRGB(196, 210, 188),
+	},
+}
+
+-- Estatua del Guardián sobre un pedestal
+local function estatuaGuardian(modelo, id, cf, colorGuardian)
+	local datos = ESTATUAS[id]
+	local material, color = datos.material, datos.color
+	pieza(
+		modelo,
+		{
+			Name = "Pedestal",
+			Size = Vector3.new(8, 3.6, 8),
+			CFrame = cf * CFrame.new(0, 1.8, 0),
+			Material = material,
+			Color = color:Lerp(Color3.new(0, 0, 0), 0.15),
+		}
+	)
+	pieza(
+		modelo,
+		{
+			Name = "Moldura",
+			Size = Vector3.new(9, 0.8, 9),
+			CFrame = cf * CFrame.new(0, 0.4, 0),
+			Material = material,
+			Color = color:Lerp(Color3.new(0, 0, 0), 0.25),
+		}
+	)
+	pieza(
+		modelo,
+		{
+			Name = "Inscripcion",
+			Size = Vector3.new(4.5, 0.4, 0.08),
+			CFrame = cf * CFrame.new(0, 2.2, -4.02),
+			Material = Enum.Material.Neon,
+			Color = colorGuardian,
+			CanCollide = false,
+		}
+	)
+	local estatua, enMano = Escultor.Estatua({
+		nombre = "Estatua de " .. id,
+		apariencia = datos.apariencia,
+		pose = POSES[id],
+		escala = 2.5,
+		material = material,
+		color = color,
+	}, modelo, cf * CFrame.new(0, 3.6, 0))
+	return estatua, enMano
+end
+
+-- ---------- Sylvaris (Vida): arboleda sagrada con estanque ----------
+local function santuarioSylvaris(modelo, base, alto, datos, color)
+	local piedra = Color3.fromRGB(150, 150, 136)
+	plataforma(modelo, base, alto, 40, "Redonda", Enum.Material.Cobblestone, Color3.fromRGB(110, 112, 96))
+	pieza(
+		modelo,
+		{
+			Name = "Suelo",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.3, 34, 34),
+			CFrame = base * CFrame.new(0, 0.15, 0) * g(0, 0, 90),
+			Material = Enum.Material.Grass,
+			Color = Color3.fromRGB(86, 120, 60),
+		}
+	)
+	-- estanque con agua clara
+	pieza(
+		modelo,
+		{
+			Name = "BordeEstanque",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1, 13, 13),
+			CFrame = base * CFrame.new(0, 0.5, -3) * g(0, 0, 90),
+			Material = Enum.Material.Limestone,
+			Color = piedra,
+		}
+	)
+	local agua = pieza(
+		modelo,
+		{
+			Name = "Agua",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.2, 11.5, 11.5),
+			CFrame = base * CFrame.new(0, 0.95, -3) * g(0, 0, 90),
+			Material = Enum.Material.Glass,
+			Color = Color3.fromRGB(90, 170, 160),
+			Transparency = 0.35,
+			Reflectance = 0.25,
+			CanCollide = false,
+		}
+	)
+	motas(agua, color, 4)
+	-- círculo de arcos cubiertos de musgo
+	for i = 1, 6 do
+		local a = i * math.pi / 3
+		local cf = base * g(0, math.deg(a), 0) * CFrame.new(0, 0, -15)
+		columna(modelo, cf * CFrame.new(-2.6, 0, 0), 9, 1.6, Enum.Material.Limestone, piedra, i == 4)
+		columna(modelo, cf * CFrame.new(2.6, 0, 0), 9, 1.6, Enum.Material.Limestone, piedra, false)
+		if i ~= 4 then
+			local dintel = pieza(
 				modelo,
-				{ Name = "Base", Size = Vector3.new(3.2, 1.2, 3.2), CFrame = cfColumna * CFrame.new(0, 0.6, 0) }
+				{
+					Name = "Dintel",
+					Size = Vector3.new(7.4, 1.2, 2),
+					CFrame = cf * CFrame.new(0, 10.8, 0),
+					Material = Enum.Material.Limestone,
+					Color = piedra,
+				}
 			)
-		else
-			local h = if i % 2 == 0 then aleatorio:NextNumber(10, 14) else aleatorio:NextNumber(4, 8)
-			pieza(
-				modelo,
-				{ Name = "Base", Size = Vector3.new(3.2, 1.2, 3.2), CFrame = cfColumna * CFrame.new(0, 0.6, 0) }
-			)
-			pieza(modelo, {
-				Name = "Columna",
-				Size = Vector3.new(2.4, h, 2.4),
-				CFrame = cfColumna
-					* CFrame.new(0, 1.2 + h / 2, 0)
-					* CFrame.Angles(0, math.rad(45), math.rad(aleatorio:NextNumber(-3, 3))),
-				Color = PIEDRA:Lerp(Color3.fromRGB(90, 110, 80), aleatorio:NextNumber(0, 0.35)),
-			})
-			if h > 10 then
-				pieza(modelo, {
-					Name = "Capitel",
-					Size = Vector3.new(3.4, 1, 3.4),
-					CFrame = cfColumna * CFrame.new(0, 1.2 + h + 0.5, 0),
-				})
+			musgo(modelo, dintel, 2)
+			-- enredaderas colgando
+			for _ = 1, 3 do
+				pieza(
+					modelo,
+					{
+						Name = "Enredadera",
+						Size = Vector3.new(0.2, aleatorio:NextNumber(2, 5), 0.2),
+						CFrame = dintel.CFrame * CFrame.new(aleatorio:NextNumber(-3, 3), -2, -1.05),
+						Material = Enum.Material.Grass,
+						Color = Color3.fromRGB(70, 110, 50),
+						CanCollide = false,
+					}
+				)
 			end
 		end
 	end
+	-- flores de colores
+	for _ = 1, 26 do
+		local a, r = aleatorio:NextNumber(0, math.pi * 2), aleatorio:NextNumber(7, 16)
+		pieza(
+			modelo,
+			{
+				Name = "Flor",
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.one * aleatorio:NextNumber(0.4, 0.7),
+				CFrame = base * CFrame.new(math.cos(a) * r, 0.5, math.sin(a) * r),
+				Material = Enum.Material.SmoothPlastic,
+				Color = ({
+					Color3.fromRGB(255, 190, 220),
+					Color3.fromRGB(255, 240, 150),
+					Color3.fromRGB(200, 170, 255),
+					Color3.new(1, 1, 1),
+				})[aleatorio:NextInteger(1, 4)],
+				CanCollide = false,
+			}
+		)
+	end
+	local _, enMano = estatuaGuardian(modelo, "Sylvaris", base * CFrame.new(0, 0, 9), color)
+	-- brotes de luz en sus manos
+	for _, mano in { "LeftHand", "RightHand" } do
+		enMano(mano, function(cf)
+			local brote = pieza(
+				modelo,
+				{
+					Name = "Brote",
+					Shape = Enum.PartType.Ball,
+					Size = Vector3.one * 1.3,
+					CFrame = cf * CFrame.new(0, -1, 0),
+					Material = Enum.Material.Neon,
+					Color = color,
+					CanCollide = false,
+				}
+			)
+			luz(brote, color, 12, 1.2)
+			motas(brote, color, 4)
+		end)
+	end
+	estela(
+		modelo,
+		base * CFrame.new(0, 0, 3) * g(0, 180, 0),
+		color,
+		datos.estela,
+		Enum.Material.Limestone,
+		Color3.fromRGB(120, 124, 110)
+	)
+	tablilla(modelo, base * g(0, 210, 0) * CFrame.new(0, 0, -11), color, datos.tablilla)
+	escombros(modelo, base, 22, 10, piedra)
+end
 
-	-- estatua del Guardián (rota) detrás de la estela
-	local cfEstatua = base * CFrame.new(0, 0, 8)
-	pieza(modelo, {
-		Name = "Pedestal",
-		Size = Vector3.new(5, 3, 5),
-		CFrame = cfEstatua * CFrame.new(0, 1.5, 0),
-		Material = Enum.Material.Marble,
-		Color = MARMOL,
-	})
-	pieza(modelo, {
-		Name = "Tunica",
-		Size = Vector3.new(3.4, 7, 2.2),
-		CFrame = cfEstatua * CFrame.new(0, 6.5, 0),
-		Material = Enum.Material.Marble,
-		Color = MARMOL,
-	})
-	pieza(modelo, {
-		Name = "Hombros",
-		Size = Vector3.new(4.6, 1.4, 2.4),
-		CFrame = cfEstatua * CFrame.new(0, 10.4, 0),
-		Material = Enum.Material.Marble,
-		Color = MARMOL,
-	})
-	pieza(modelo, {
-		Name = "Brazo",
-		Size = Vector3.new(1.2, 5, 1.2),
-		CFrame = cfEstatua * CFrame.new(-2.6, 9.6, -1) * CFrame.Angles(math.rad(35), 0, math.rad(-10)),
-		Material = Enum.Material.Marble,
-		Color = MARMOL,
-	})
-	pieza(modelo, {
-		Name = "CabezaCaida",
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.one * 2.2,
-		CFrame = cfEstatua * CFrame.new(3.6, 1.1, -3.4),
-		Material = Enum.Material.Marble,
-		Color = MARMOL,
-	})
-	local orbe = pieza(modelo, {
-		Name = "Orbe",
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.one * 1.4,
-		CFrame = cfEstatua * CFrame.new(-3.4, 12.6, -2.4),
-		Material = Enum.Material.Neon,
-		Color = color,
-		CanCollide = false,
-	})
-	luz(orbe, color, 14, 1.2)
+-- ---------- Ignar (Fuego): templo escalonado de arenisca con braseros ----------
+local function santuarioIgnar(modelo, base, alto, datos, color)
+	local arena = Color3.fromRGB(206, 160, 110)
+	plataforma(modelo, base, alto, 40, "Cuadrada", Enum.Material.Sandstone, arena:Lerp(Color3.new(0, 0, 0), 0.15))
+	pieza(
+		modelo,
+		{
+			Name = "Grada1",
+			Size = Vector3.new(32, 1.4, 32),
+			CFrame = base * CFrame.new(0, 0.7, 0),
+			Material = Enum.Material.Sandstone,
+			Color = arena,
+		}
+	)
+	pieza(
+		modelo,
+		{
+			Name = "Grada2",
+			Size = Vector3.new(22, 1.4, 22),
+			CFrame = base * CFrame.new(0, 2.1, 0),
+			Material = Enum.Material.Sandstone,
+			Color = arena:Lerp(Color3.new(1, 1, 1), 0.05),
+		}
+	)
+	local arriba = base * CFrame.new(0, 2.8, 0)
+	-- grietas de lava en el suelo
+	for i = 1, 8 do
+		pieza(
+			modelo,
+			{
+				Name = "Lava",
+				Size = Vector3.new(0.35, 0.1, aleatorio:NextNumber(4, 9)),
+				CFrame = base * g(0, i * 45 + aleatorio:NextNumber(-15, 15), 0) * CFrame.new(0, 1.42, -10),
+				Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(255, 110, 30),
+				CanCollide = false,
+			}
+		)
+	end
+	-- obeliscos en las esquinas y braseros
+	for i = 1, 4 do
+		local cf = base * g(0, i * 90 + 45, 0) * CFrame.new(0, 1.4, -19)
+		local ob = pieza(
+			modelo,
+			{
+				Name = "Obelisco",
+				Size = Vector3.new(2.6, 14, 2.6),
+				CFrame = cf * CFrame.new(0, 7, 0) * g(0, 0, aleatorio:NextNumber(-3, 3)),
+				Material = Enum.Material.Sandstone,
+				Color = arena:Lerp(Color3.new(0, 0, 0), 0.1),
+			}
+		)
+		pieza(
+			modelo,
+			{
+				Name = "Punta",
+				Size = Vector3.new(1.8, 2, 1.8),
+				CFrame = ob.CFrame * CFrame.new(0, 8, 0) * g(0, 45, 0),
+				Material = Enum.Material.Metal,
+				Color = Color3.fromRGB(200, 150, 70),
+			}
+		)
+		pieza(
+			modelo,
+			{
+				Name = "RunaObelisco",
+				Size = Vector3.new(0.3, 9, 0.08),
+				CFrame = ob.CFrame * CFrame.new(0, 0, -1.33),
+				Material = Enum.Material.Neon,
+				Color = color,
+				CanCollide = false,
+			}
+		)
+		brasero(modelo, base * g(0, i * 90, 0) * CFrame.new(0, 2.8, -9))
+	end
+	local _, enMano = estatuaGuardian(modelo, "Ignar", arriba * CFrame.new(0, 0, 5), color)
+	-- espada de fuego en alto
+	enMano("RightHand", function(cf, escala)
+		local hoja = pieza(
+			modelo,
+			{
+				Name = "EspadaIgnar",
+				Size = Vector3.new(0.35 * escala, 4.2 * escala, 0.12 * escala),
+				CFrame = cf * CFrame.new(0, -2.4 * escala, 0),
+				Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(255, 140, 50),
+				CanCollide = false,
+			}
+		)
+		local fuego = Instance.new("Fire")
+		fuego.Size = 5
+		fuego.Heat = 12
+		fuego.Color = Color3.fromRGB(255, 160, 60)
+		fuego.SecondaryColor = Color3.fromRGB(255, 70, 20)
+		fuego.Parent = hoja
+		luz(hoja, Color3.fromRGB(255, 140, 60), 26, 2.5)
+		pieza(
+			modelo,
+			{
+				Name = "Guarda",
+				Size = Vector3.new(1.4 * escala, 0.2 * escala, 0.3 * escala),
+				CFrame = cf * CFrame.new(0, -0.3 * escala, 0),
+				Material = Enum.Material.Metal,
+				Color = Color3.fromRGB(140, 110, 60),
+				CanCollide = false,
+			}
+		)
+	end)
+	estela(
+		modelo,
+		arriba * CFrame.new(0, 0, -3) * g(0, 180, 0),
+		color,
+		datos.estela,
+		Enum.Material.Sandstone,
+		Color3.fromRGB(150, 110, 76)
+	)
+	tablilla(modelo, base * g(0, 30, 0) * CFrame.new(0, 1.4, -13), color, datos.tablilla)
+	escombros(modelo, base, 24, 12, arena, Enum.Material.Sandstone)
+end
 
-	-- estela con runas
-	local cfEstela = base * CFrame.new(0, 0, 2)
-	local estela = pieza(modelo, {
-		Name = "Estela",
-		Size = Vector3.new(5, 9, 1.4),
-		CFrame = cfEstela * CFrame.new(0, 4.5, 0),
-		Material = Enum.Material.Basalt,
-		Color = Color3.fromRGB(46, 46, 52),
+-- ---------- Morvak (Muerte): cementerio gótico con niebla y velas ----------
+local function santuarioMorvak(modelo, base, alto, datos, color)
+	local piedra = Color3.fromRGB(62, 60, 68)
+	plataforma(modelo, base, alto, 40, "Redonda", Enum.Material.Basalt, Color3.fromRGB(44, 42, 48))
+	pieza(
+		modelo,
+		{
+			Name = "Losas",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.3, 34, 34),
+			CFrame = base * CFrame.new(0, 0.15, 0) * g(0, 0, 90),
+			Material = Enum.Material.Slate,
+			Color = Color3.fromRGB(70, 68, 74),
+		}
+	)
+	-- arco gótico roto detrás de la estatua
+	local cfArco = base * CFrame.new(0, 0, 14)
+	columna(modelo, cfArco * CFrame.new(-5, 0, 0), 14, 2, Enum.Material.Basalt, piedra, false)
+	columna(modelo, cfArco * CFrame.new(5, 0, 0), 9, 2, Enum.Material.Basalt, piedra, true)
+	pieza(
+		modelo,
+		{
+			Name = "ArcoIzq",
+			Size = Vector3.new(6, 1.6, 2),
+			CFrame = cfArco * CFrame.new(-2.4, 16.2, 0) * g(0, 0, -28),
+			Material = Enum.Material.Basalt,
+			Color = piedra,
+		}
+	)
+	-- lápidas
+	for i = 1, 12 do
+		local a = (i / 12) * math.pi * 2 + aleatorio:NextNumber(-0.15, 0.15)
+		local cf = base * g(0, math.deg(a), 0) * CFrame.new(0, 0, -aleatorio:NextNumber(10, 16))
+		local lapida = pieza(
+			modelo,
+			{
+				Name = "Lapida",
+				Size = Vector3.new(2.2, aleatorio:NextNumber(2.6, 4), 0.6),
+				CFrame = cf
+					* CFrame.new(0, 1.4, 0)
+					* g(aleatorio:NextNumber(-12, 12), 0, aleatorio:NextNumber(-10, 10)),
+				Material = Enum.Material.Slate,
+				Color = piedra:Lerp(Color3.fromRGB(120, 120, 120), aleatorio:NextNumber(0, 0.3)),
+			}
+		)
+		if i % 3 == 0 then
+			-- vela encima
+			local vela = pieza(
+				modelo,
+				{
+					Name = "Vela",
+					Size = Vector3.new(0.25, 0.6, 0.25),
+					CFrame = lapida.CFrame * CFrame.new(0, lapida.Size.Y / 2 + 0.3, 0),
+					Material = Enum.Material.SmoothPlastic,
+					Color = Color3.fromRGB(230, 220, 200),
+					CanCollide = false,
+				}
+			)
+			local llama = pieza(
+				modelo,
+				{
+					Name = "Llama",
+					Shape = Enum.PartType.Ball,
+					Size = Vector3.one * 0.25,
+					CFrame = vela.CFrame * CFrame.new(0, 0.42, 0),
+					Material = Enum.Material.Neon,
+					Color = Color3.fromRGB(190, 140, 255),
+					CanCollide = false,
+				}
+			)
+			luz(llama, Color3.fromRGB(170, 120, 255), 9, 1)
+		end
+	end
+	-- niebla que se arrastra por el suelo
+	local niebla = pieza(
+		modelo,
+		{
+			Name = "Niebla",
+			Size = Vector3.new(30, 0.5, 30),
+			CFrame = base * CFrame.new(0, 0.6, 0),
+			Transparency = 1,
+			CanCollide = false,
+		}
+	)
+	local humo = Instance.new("ParticleEmitter")
+	humo.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	humo.Color = ColorSequence.new(Color3.fromRGB(150, 130, 190))
+	humo.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 7) })
+	humo.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.4, 0.75),
+		NumberSequenceKeypoint.new(1, 1),
 	})
-	for linea = 1, 5 do
-		local ancho = aleatorio:NextNumber(2.4, 3.8)
-		pieza(modelo, {
-			Name = "RunaEstela",
-			Size = Vector3.new(ancho, 0.22, 0.1),
-			CFrame = cfEstela * CFrame.new(0, 2.2 + linea * 1.1, -0.72),
+	humo.Lifetime = NumberRange.new(5, 8)
+	humo.Speed = NumberRange.new(0.3, 1)
+	humo.SpreadAngle = Vector2.new(80, 10)
+	humo.Rate = 6
+	humo.Parent = niebla
+	local _, enMano = estatuaGuardian(modelo, "Morvak", base * CFrame.new(0, 0, 7), color)
+	-- guadaña
+	enMano("RightHand", function(cf, escala)
+		local asta = pieza(
+			modelo,
+			{
+				Name = "Asta",
+				Size = Vector3.new(0.3 * escala, 7.5 * escala, 0.3 * escala),
+				CFrame = CFrame.new(cf.Position) * CFrame.new(0, 1.2 * escala, 0),
+				Material = Enum.Material.Wood,
+				Color = Color3.fromRGB(40, 32, 30),
+				CanCollide = false,
+			}
+		)
+		local hoja = pieza(
+			modelo,
+			{
+				Name = "HojaGuadana",
+				Size = Vector3.new(0.12 * escala, 0.7 * escala, 3.6 * escala),
+				CFrame = asta.CFrame * CFrame.new(0, 3.5 * escala, -1.6 * escala) * g(18, 0, 0),
+				Material = Enum.Material.Metal,
+				Color = Color3.fromRGB(150, 140, 170),
+				CanCollide = false,
+			}
+		)
+		luz(hoja, color, 14, 1.4)
+	end)
+	estela(modelo, base * CFrame.new(0, 0, 1) * g(0, 180, 0), color, datos.estela)
+	tablilla(modelo, base * g(0, 160, 0) * CFrame.new(0, 0, -9), color, datos.tablilla)
+	escombros(modelo, base, 22, 10, piedra, Enum.Material.Basalt)
+end
+
+-- ---------- Lunaria (Luz): templo de mármol abierto con cristales ----------
+local function santuarioLunaria(modelo, base, alto, datos, color)
+	local marmol = Color3.fromRGB(236, 234, 228)
+	plataforma(modelo, base, alto, 38, "Redonda", Enum.Material.Marble, Color3.fromRGB(200, 198, 194))
+	pieza(
+		modelo,
+		{
+			Name = "Suelo",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.4, 32, 32),
+			CFrame = base * CFrame.new(0, 0.2, 0) * g(0, 0, 90),
+			Material = Enum.Material.Marble,
+			Color = marmol,
+		}
+	)
+	pieza(
+		modelo,
+		{
+			Name = "Sol",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.1, 12, 12),
+			CFrame = base * CFrame.new(0, 0.42, 0) * g(0, 0, 90),
 			Material = Enum.Material.Neon,
 			Color = color,
+			Transparency = 0.6,
 			CanCollide = false,
-		})
+		}
+	)
+	-- peristilo: 10 columnas finas y un anillo encima (tholos)
+	for i = 1, 10 do
+		local a = i * 36
+		columna(modelo, base * g(0, a, 0) * CFrame.new(0, 0.4, -13), 13, 1.5, Enum.Material.Marble, marmol, i == 7)
 	end
-	local gema = pieza(modelo, {
-		Name = "Gema",
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.one * 1,
-		CFrame = cfEstela * CFrame.new(0, 9.4, 0),
-		Material = Enum.Material.Neon,
-		Color = color,
-		CanCollide = false,
-	})
-	luz(gema, color, 20, 2)
-	motas(gema, color, 4)
-	legible(estela, datos.estela, "Leer inscripción")
+	for i = 1, 20 do
+		if i < 13 or i > 15 then -- un trozo del anillo se cayó
+			local a = i * 18
+			pieza(
+				modelo,
+				{
+					Name = "Anillo",
+					Size = Vector3.new(4.3, 1.2, 2.2),
+					CFrame = base * g(0, a, 0) * CFrame.new(0, 15.9, -13),
+					Material = Enum.Material.Marble,
+					Color = marmol,
+				}
+			)
+		end
+	end
+	-- cristales de luz
+	for _ = 1, 7 do
+		local a = aleatorio:NextNumber(0, math.pi * 2)
+		local r = aleatorio:NextNumber(15, 19)
+		local cristal = pieza(
+			modelo,
+			{
+				Name = "Cristal",
+				Size = Vector3.new(1.2, aleatorio:NextNumber(3, 6), 1.2),
+				CFrame = base
+					* CFrame.new(math.cos(a) * r, 1.5, math.sin(a) * r)
+					* g(aleatorio:NextNumber(-20, 20), aleatorio:NextNumber(0, 90), aleatorio:NextNumber(-20, 20)),
+				Material = Enum.Material.Glass,
+				Color = Color3.fromRGB(255, 245, 210),
+				Transparency = 0.2,
+				Reflectance = 0.3,
+			}
+		)
+		luz(cristal, color, 10, 0.8)
+	end
+	-- haz de luz que baja del cielo
+	pieza(
+		modelo,
+		{
+			Name = "HazDeLuz",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(50, 6, 6),
+			CFrame = base * CFrame.new(0, 25, 0) * g(0, 0, 90),
+			Material = Enum.Material.Neon,
+			Color = Color3.fromRGB(255, 245, 210),
+			Transparency = 0.85,
+			CanCollide = false,
+		}
+	)
+	local _, enMano = estatuaGuardian(modelo, "Lunaria", base * CFrame.new(0, 0, 4), color)
+	enMano("RightHand", function(cf, escala)
+		local orbe = pieza(
+			modelo,
+			{
+				Name = "OrbeLunaria",
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.one * 1.6 * escala,
+				CFrame = CFrame.new(cf.Position) * CFrame.new(-0.7 * escala, 1.2 * escala, 0),
+				Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(255, 250, 220),
+				CanCollide = false,
+			}
+		)
+		luz(orbe, color, 30, 3)
+		motas(orbe, color, 8)
+	end)
+	estela(
+		modelo,
+		base * CFrame.new(0, 0, -4) * g(0, 180, 0),
+		color,
+		datos.estela,
+		Enum.Material.Marble,
+		Color3.fromRGB(190, 188, 182)
+	)
+	tablilla(modelo, base * g(0, 120, 0) * CFrame.new(0, 0, -9), color, datos.tablilla)
+	escombros(modelo, base, 20, 8, marmol, Enum.Material.Marble)
+end
 
-	-- tablilla apoyada en una columna
-	local cfTablilla = base * CFrame.Angles(0, math.rad(200), 0) * CFrame.new(0, 0, -10)
-	local tablilla = pieza(modelo, {
-		Name = "Tablilla",
-		Size = Vector3.new(2.6, 3.2, 0.5),
-		CFrame = cfTablilla * CFrame.new(0, 1.5, 0) * CFrame.Angles(math.rad(-18), 0, 0),
-		Material = Enum.Material.Limestone,
-		Color = Color3.fromRGB(176, 164, 140),
-	})
-	pieza(modelo, {
-		Name = "RunaTablilla",
-		Size = Vector3.new(1.8, 0.14, 0.06),
-		CFrame = tablilla.CFrame * CFrame.new(0, 0.4, -0.28),
-		Material = Enum.Material.Neon,
-		Color = color,
-		CanCollide = false,
-	})
-	legible(tablilla, datos.tablilla, "Leer")
+local CONSTRUCTORES =
+	{ Sylvaris = santuarioSylvaris, Ignar = santuarioIgnar, Morvak = santuarioMorvak, Lunaria = santuarioLunaria }
 
-	modelo.PrimaryPart = estela
+local function construirSantuario(datos)
+	local guardian = HistoriaConfig.GUARDIANES[datos.guardian]
+	local color = guardian.color
+	local centro, minimo, maximo = buscarSitio(datos.posicion.X, datos.posicion.Y, 20)
+	despejar(centro, 32)
+	local modelo = Instance.new("Model")
+	modelo.Name = datos.nombre
+	modelo:SetAttribute("Santuario", datos.id)
+	modelo:SetAttribute("Guardian", guardian.nombre)
+	modelo.ModelStreamingMode = Enum.ModelStreamingMode.Atomic -- llega entero al jugador
+	modelo.Parent = carpeta
+	local alto = (maximo - minimo) + 3
+	local base = CFrame.new(centro.X, centro.Y + 0.8, centro.Z) * g(0, aleatorio:NextNumber(0, 360), 0)
+	local constructor = CONSTRUCTORES[datos.id]
+	if constructor then
+		constructor(modelo, base, alto, datos, color)
+	end
+	modelo.PrimaryPart = modelo:FindFirstChild("Estela")
 	modelo:SetAttribute("Centro", centro)
 	return modelo
 end
@@ -429,8 +1104,8 @@ local function construirSello()
 	local humo = motas(nucleo, color, 14)
 	humo.Speed = NumberRange.new(3, 6)
 	humo.Size = NumberSequence.new(0.5, 0)
-	-- estela con el texto
-	local estela = pieza(modelo, {
+	-- piedraTexto con el texto
+	local piedraTexto = pieza(modelo, {
 		Name = "Estela",
 		Size = Vector3.new(4.4, 7, 1.2),
 		CFrame = base * CFrame.new(0, 3.5, 13),
@@ -441,14 +1116,14 @@ local function construirSello()
 		pieza(modelo, {
 			Name = "RunaEstela",
 			Size = Vector3.new(aleatorio:NextNumber(2, 3.4), 0.2, 0.1),
-			CFrame = estela.CFrame * CFrame.new(0, -2.6 + linea * 1.2, -0.62),
+			CFrame = piedraTexto.CFrame * CFrame.new(0, -2.6 + linea * 1.2, -0.62),
 			Material = Enum.Material.Neon,
 			Color = color,
 			CanCollide = false,
 		})
 	end
-	legible(estela, datos.texto, "Examinar la grieta")
-	modelo.PrimaryPart = estela
+	legible(piedraTexto, datos.texto, "Examinar la grieta")
+	modelo.PrimaryPart = piedraTexto
 	modelo:SetAttribute("Centro", centro)
 	return modelo
 end
@@ -475,17 +1150,20 @@ function RuinasServicio.Iniciar(funcionLeer)
 	carpeta = Instance.new("Folder")
 	carpeta.Name = "Historia"
 	carpeta.Parent = Workspace
-	for _, datos in HistoriaConfig.SANTUARIOS do
-		local ok, err = pcall(construirSantuario, datos)
-		if not ok then
-			warn("[HISTORIA] No pude construir", datos.nombre, err)
-		end
-	end
 	local ok, err = pcall(construirSello)
 	if not ok then
 		warn("[HISTORIA] No pude construir la grieta del sello", err)
 	end
-	print("[HISTORIA] Santuarios de los Guardianes y grieta del sello listos")
+	-- las estatuas tardan un poco (cargan ropa y pelo del catálogo): en segundo plano
+	task.spawn(function()
+		for _, datos in HistoriaConfig.SANTUARIOS do
+			local bien, error_ = pcall(construirSantuario, datos)
+			if not bien then
+				warn("[HISTORIA] No pude construir", datos.nombre, error_)
+			end
+		end
+		print("[HISTORIA] Santuarios de los Guardianes y grieta del sello listos")
+	end)
 end
 
 return RuinasServicio
