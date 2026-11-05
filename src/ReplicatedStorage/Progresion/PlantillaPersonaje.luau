@@ -12,6 +12,8 @@
 
 local Constantes = require(script.Parent.Parent.Config.Constantes)
 local ProgresionConfig = require(script.Parent.Parent.Config.ProgresionConfig)
+local AparienciaConfig = require(script.Parent.Parent.Config.AparienciaConfig)
+local RazasConfig = require(script.Parent.Parent.Config.RazasConfig)
 
 local Plantilla = {}
 
@@ -50,7 +52,8 @@ function Plantilla.Nueva()
 		PuntosLibres = 0, -- puntos de atributo sin repartir
 		Clase = "Ninguna",
 		Subclase = "Ninguna",
-		Raza = "Ninguna",
+		Raza = "Ninguna", -- se gira en Personalizar (Config/RazasConfig)
+		AfinidadMagica = "Ninguna", -- elemento principal, también se gira
 		Oro = 0,
 		Ubicacion = {}, -- { X, Y, Z, Region } de la última posición segura (vacío = aparición inicial)
 
@@ -88,6 +91,13 @@ function Plantilla.Nueva()
 
 		-- Ajustes del jugador (teclas reasignadas, etc.)
 		Ajustes = { Teclas = {} },
+
+		-- Aspecto (editor Personalizar, opciones en Config/AparienciaConfig)
+		Apariencia = AparienciaConfig.PorDefecto(),
+		-- Giros que le quedan para raza y afinidad mágica
+		Giros = { Raza = RazasConfig.GIROS_INICIALES.Raza, Afinidad = RazasConfig.GIROS_INICIALES.Afinidad },
+		CodigosUsados = {}, -- { [CODIGO] = true }
+		Creado = false, -- pasa a true la primera vez que pulsa Jugar
 
 		-- Datos internos
 		Registro = { Creado = os.time(), TiempoJugado = 0, UltimaConexion = os.time() },

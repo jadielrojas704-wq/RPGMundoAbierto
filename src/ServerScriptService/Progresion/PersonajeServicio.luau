@@ -26,6 +26,7 @@ local DatosServicio = require(script.Parent.DatosServicio)
 local EstaminaServicio = require(script.Parent.Parent.Combate.EstaminaServicio)
 
 local ControlesConfig = require(ReplicatedStorage.Config.ControlesConfig)
+local RazasConfig = require(ReplicatedStorage.Config.RazasConfig)
 
 local RemoteRepartir = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("RepartirPuntos")
 local RemoteTeclas = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("GuardarTeclas")
@@ -42,12 +43,27 @@ local ultimoReparto = {} -- [jugador] = tiempo (límite de peticiones)
 
 -- ===== Atributos con efecto real =====
 
+-- Atributos con los bonos de la raza sumados (los que usan el combate y las fórmulas)
+function PersonajeServicio.AtributosEfectivos(datos)
+	local atributos = table.clone(datos.Atributos)
+	local raza = RazasConfig.RAZA_POR_ID[datos.Raza]
+	if raza then
+		for nombre, extra in raza.bonos do
+			atributos[nombre] = (atributos[nombre] or ProgresionConfig.ATRIBUTO_INICIAL) + extra
+		end
+	end
+	return atributos
+end
+
 function PersonajeServicio.Aplicar(jugador)
 	local datos = DatosServicio.Obtener(jugador)
 	if not datos then
 		return
 	end
-	local v = Formulas.Calcular(datos.Atributos)
+	local atributos = PersonajeServicio.AtributosEfectivos(datos)
+	jugador:SetAttribute("Raza", datos.Raza)
+	jugador:SetAttribute("AfinidadMagica", datos.AfinidadMagica)
+	local v = Formulas.Calcular(atributos)
 	jugador:SetAttribute("VidaMax", v.VidaMax)
 	jugador:SetAttribute("ManaMax", v.ManaMax)
 	jugador:SetAttribute("RegenMana", v.RegenMana)
@@ -96,7 +112,14 @@ function PersonajeServicio.DarExperiencia(jugador, cantidad)
 	end) or 0
 	if subidos > 0 then
 		local datos = DatosServicio.Obtener(jugador)
-		print(string.format("[PERSONAJE] %s sube al nivel %d (+%d puntos)", jugador.Name, datos.Nivel, subidos * ProgresionConfig.PUNTOS_POR_NIVEL))
+		print(
+			string.format(
+				"[PERSONAJE] %s sube al nivel %d (+%d puntos)",
+				jugador.Name,
+				datos.Nivel,
+				subidos * ProgresionConfig.PUNTOS_POR_NIVEL
+			)
+		)
 	end
 	return subidos
 end
@@ -193,7 +216,13 @@ local function alRepartir(jugador, reparto)
 	local total = 0
 	local limpio = {}
 	for nombre, cantidad in reparto do
-		if not esAtributo[nombre] or type(cantidad) ~= "number" or cantidad ~= math.floor(cantidad) or cantidad < 0 or cantidad > 2000 then
+		if
+			not esAtributo[nombre]
+			or type(cantidad) ~= "number"
+			or cantidad ~= math.floor(cantidad)
+			or cantidad < 0
+			or cantidad > 2000
+		then
 			return -- algo raro: se ignora todo
 		end
 		limpio[nombre] = cantidad
@@ -242,7 +271,10 @@ end
 -- ===== Ubicación guardada =====
 
 local function posicionValida(p)
-	return math.abs(p.X) < RegionesConfig.MITAD - 10 and math.abs(p.Z) < RegionesConfig.MITAD - 10 and p.Y > RegionesConfig.NIVEL_AGUA - 5 and p.Y < 1300
+	return math.abs(p.X) < RegionesConfig.MITAD - 10
+		and math.abs(p.Z) < RegionesConfig.MITAD - 10
+		and p.Y > RegionesConfig.NIVEL_AGUA - 5
+		and p.Y < 1300
 end
 
 local function apuntarUbicacion(jugador)
@@ -354,7 +386,10 @@ function PersonajeServicio.Iniciar()
 				local maximo = jugador:GetAttribute("ManaMax")
 				local actual = jugador:GetAttribute("Mana")
 				if maximo and actual and actual < maximo then
-					jugador:SetAttribute("Mana", math.min(maximo, actual + (jugador:GetAttribute("RegenMana") or 5) * dt))
+					jugador:SetAttribute(
+						"Mana",
+						math.min(maximo, actual + (jugador:GetAttribute("RegenMana") or 5) * dt)
+					)
 				end
 			end
 			if os.clock() >= siguienteUbicacion then

@@ -101,7 +101,10 @@ local function golpear(jugador, golpe, multiplicador)
 	local partes = Workspace:GetPartBoundsInBox(caja, Vector3.new(golpe.Ancho, golpe.Alto, golpe.Alcance), parametros)
 
 	local datos = DatosServicio.Obtener(jugador)
-	local atributos = datos and datos.Atributos or {}
+	local atributos = if datos and PersonajeServicio
+		then PersonajeServicio.AtributosEfectivos(datos)
+		elseif datos then datos.Atributos
+		else {}
 	local yaGolpeados = {}
 	for _, parte in partes do
 		local objetivo = modeloDe(parte)
@@ -172,7 +175,12 @@ local function golpear(jugador, golpe, multiplicador)
 
 				-- usar el arma sube su maestría
 				if PersonajeServicio then
-					PersonajeServicio.DarExpOficio(jugador, "Maestrias", "SinArmas", if golpe.Tipo == "Pesado" then 4 else 2)
+					PersonajeServicio.DarExpOficio(
+						jugador,
+						"Maestrias",
+						"SinArmas",
+						if golpe.Tipo == "Pesado" then 4 else 2
+					)
 				end
 			end
 		end
@@ -264,7 +272,8 @@ function CombateServicio.Iniciar()
 	PersonajeServicio = require(script.Parent.Parent.Progresion.PersonajeServicio)
 
 	local function alEntrar(jugador)
-		estado[jugador] = { indice = 0, finGolpe = 0, cargandoDesde = nil, mensajes = 0, ventana = os.clock(), enCombateHasta = 0 }
+		estado[jugador] =
+			{ indice = 0, finGolpe = 0, cargandoDesde = nil, mensajes = 0, ventana = os.clock(), enCombateHasta = 0 }
 	end
 	Players.PlayerAdded:Connect(alEntrar)
 	for _, jugador in Players:GetPlayers() do
@@ -275,6 +284,9 @@ function CombateServicio.Iniciar()
 	end)
 
 	RemoteCombate.OnServerEvent:Connect(function(jugador, accion)
+		if jugador:GetAttribute("EnMenu") then
+			return -- todavía en la pantalla de inicio
+		end
 		local e = estado[jugador]
 		if not e or type(accion) ~= "string" then
 			return

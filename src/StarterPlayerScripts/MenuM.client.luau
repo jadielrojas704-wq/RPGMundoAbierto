@@ -19,6 +19,7 @@ local Formulas = require(ReplicatedStorage:WaitForChild("Progresion"):WaitForChi
 local Controles = require(ReplicatedStorage:WaitForChild("Combate"):WaitForChild("Controles"))
 local Config = ReplicatedStorage:WaitForChild("Config")
 local ProgresionConfig = require(Config:WaitForChild("ProgresionConfig"))
+local RazasConfig = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("RazasConfig"))
 local ControlesConfig = require(Config:WaitForChild("ControlesConfig"))
 local RegionesConfig = require(Config:WaitForChild("RegionesConfig"))
 local Constantes = require(Config:WaitForChild("Constantes"))
@@ -265,7 +266,10 @@ constructores.Personaje = function(padre)
 	end
 	fila(izquierda, "Clase", nada(d.Clase), 5)
 	fila(izquierda, "Subclase", nada(d.Subclase), 6)
-	fila(izquierda, "Raza", nada(d.Raza), 7)
+	local raza = RazasConfig.RAZA_POR_ID[d.Raza]
+	local afinidad = RazasConfig.AFINIDAD_POR_ID[d.AfinidadMagica or ""]
+	fila(izquierda, "Raza", if raza then raza.nombre else nada(d.Raza), 7)
+	fila(izquierda, "Afinidad mágica", if afinidad then afinidad.nombre else "Sin elegir", 7)
 	fila(izquierda, "Oro", tostring(d.Oro), 8)
 	local raiz = jugador.Character and jugador.Character:FindFirstChild("HumanoidRootPart")
 	local region = raiz and RegionesConfig.RegionEn(raiz.Position)
@@ -281,7 +285,7 @@ constructores.Personaje = function(padre)
 		TextWrapped = true,
 		TextSize = 12,
 		TextColor3 = C.textoSuave,
-		Text = "La clase, la subclase y la raza se eligen al crear el personaje (llegará en un próximo paso).",
+		Text = "La raza y la afinidad mágica se giran en Personalizar (pantalla de inicio). La clase y la subclase llegarán en un próximo paso.",
 	})
 
 	local derecha = desplazable(padre, { Position = UDim2.fromScale(0.5, 0), Size = UDim2.new(0.5, 0, 1, 0) })
@@ -935,6 +939,9 @@ cerrar.MouseButton1Click:Connect(function()
 end)
 
 UserInputService.InputBegan:Connect(function(entrada, procesado)
+	if game:GetService("Players").LocalPlayer:GetAttribute("EnMenu") then
+		return -- en la pantalla de inicio no se juega
+	end
 	if abierto and esperandoTecla then
 		capturarTecla(entrada)
 		return

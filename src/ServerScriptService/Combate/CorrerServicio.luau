@@ -92,7 +92,12 @@ function CorrerServicio.Iniciar()
 		estado[jugador] = nil
 	end)
 
-	RemotoCorrer.OnServerEvent:Connect(alPedir)
+	RemotoCorrer.OnServerEvent:Connect(function(jugador, ...)
+		if jugador:GetAttribute("EnMenu") then
+			return -- todavía en la pantalla de inicio
+		end
+		alPedir(jugador, ...)
+	end)
 
 	-- Un solo bucle para todos los jugadores
 	task.spawn(function()

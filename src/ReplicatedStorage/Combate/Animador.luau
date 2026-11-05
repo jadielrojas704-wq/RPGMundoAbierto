@@ -56,6 +56,32 @@ local CURVAS = {
 	entrada = function(x) -- empieza lento y acelera (cargar)
 		return x * x * x
 	end,
+	rebote = function(x) -- pasa un poco del objetivo y vuelve (golpes con "chasquido")
+		local c1 = 1.1
+		local c3 = c1 + 1
+		return 1 + c3 * (x - 1) ^ 3 + c1 * (x - 1) ^ 2
+	end,
+}
+
+-- Suavizado tipo muelle de cada articulación: cuanto más alto, más rápido sigue a la pose.
+-- El pecho, el cuello y las muñecas van un poco por detrás de los brazos: eso da la
+-- sensación de peso y de que el golpe "arrastra" el cuerpo (acción superpuesta).
+local RIGIDEZ = {
+	Root = 26,
+	Waist = 19,
+	Neck = 13,
+	LeftShoulder = 36,
+	RightShoulder = 36,
+	LeftElbow = 32,
+	RightElbow = 32,
+	LeftWrist = 20,
+	RightWrist = 20,
+	LeftHip = 30,
+	RightHip = 30,
+	LeftKnee = 30,
+	RightKnee = 30,
+	LeftAnkle = 22,
+	RightAnkle = 22,
 }
 
 -- Convierte una articulación (de cualquier tipo) en algo que podemos mover
@@ -107,6 +133,7 @@ function Animador.De(personaje)
 	self.congeladoHasta = 0
 	self.temblor = 0 -- temblor del cuerpo (para cargar golpes)
 	self.tocado = false
+	self.suave = {} -- última pose aplicada de cada articulación (para el muelle)
 	instancias[personaje] = self
 	return self
 end
@@ -246,6 +273,7 @@ function Animador:_actualizar(dt)
 				articulacion.poner(articulacion.original)
 			end
 			self.tocado = false
+			table.clear(self.suave)
 		end
 		return
 	end
@@ -267,6 +295,16 @@ function Animador:_actualizar(dt)
 			end
 			final = base:Lerp(g, pesoAccion)
 		end
+		-- muelle: sigue a la pose con un poco de inercia (en el congelado, se queda quieto)
+		local previo = self.suave[nombre]
+		if previo then
+			if congelado then
+				final = previo
+			else
+				final = previo:Lerp(final, 1 - math.exp(-(RIGIDEZ[nombre] or 30) * dt))
+			end
+		end
+		self.suave[nombre] = final
 		if temblor and nombre == "Root" then
 			final = final * temblor
 		end
@@ -283,6 +321,7 @@ function Animador.Soltar(personaje)
 			articulacion.poner(articulacion.original)
 		end
 		self.tocado = false
+		table.clear(self.suave)
 	end
 end
 

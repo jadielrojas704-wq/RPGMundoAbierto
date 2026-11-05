@@ -157,6 +157,9 @@ local function esquivar()
 end
 
 UserInputService.InputBegan:Connect(function(input, procesadoPorJuego)
+	if game:GetService("Players").LocalPlayer:GetAttribute("EnMenu") then
+		return -- en la pantalla de inicio no se juega
+	end
 	if procesadoPorJuego then
 		return -- por ejemplo, si está escribiendo en el chat
 	end

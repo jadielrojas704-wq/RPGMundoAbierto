@@ -31,7 +31,16 @@ local SONIDOS = {
 	Carga = { id(9125648149) }, -- Magic Zoom Up Sharp Tubular Whoosh
 }
 
-local VOLUMENES = { Silbido = 0.35, SilbidoFuerte = 0.5, Puno = 0.8, Patada = 0.85, Pesado = 1, Hueso = 0.5, Pisada = 0.3, Carga = 0.35 }
+local VOLUMENES = {
+	Silbido = 0.35,
+	SilbidoFuerte = 0.5,
+	Puno = 0.8,
+	Patada = 0.85,
+	Pesado = 1,
+	Hueso = 0.5,
+	Pisada = 0.3,
+	Carga = 0.35,
+}
 
 function EfectosCombate.Sonido(parte, nombre, volumen)
 	local lista = SONIDOS[nombre]
@@ -84,15 +93,35 @@ function EfectosCombate.Impacto(posicion, tipo, color, critico)
 	local mirando = if camara then CFrame.lookAt(posicion, camara.CFrame.Position) else CFrame.new(posicion)
 
 	-- destello (bola que crece y se apaga muy rápido)
-	local destello = pieza({ Shape = Enum.PartType.Ball, Size = Vector3.one * 0.6, CFrame = CFrame.new(posicion), Color = Color3.new(1, 1, 1), Transparency = 0 })
+	local destello = pieza({
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * 0.6,
+		CFrame = CFrame.new(posicion),
+		Color = Color3.new(1, 1, 1),
+		Transparency = 0,
+	})
 	local grande = if tipo == "Pesado" then 6 elseif fuerte then 4 else 2.6
-	TweenService:Create(destello, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.one * grande, Transparency = 1, Color = color }):Play()
+	TweenService:Create(
+		destello,
+		TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Size = Vector3.one * grande, Transparency = 1, Color = color }
+	):Play()
 	Debris:AddItem(destello, 0.2)
 
 	-- onda (anillo mirando a la cámara)
-	local onda = pieza({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.08, 1, 1), CFrame = mirando * CFrame.Angles(0, math.pi / 2, 0), Color = color, Transparency = 0.2 })
+	local onda = pieza({
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.08, 1, 1),
+		CFrame = mirando * CFrame.Angles(0, math.pi / 2, 0),
+		Color = color,
+		Transparency = 0.2,
+	})
 	local anillo = if tipo == "Pesado" then 14 elseif fuerte then 8 else 5
-	TweenService:Create(onda, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.02, anillo, anillo), Transparency = 1 }):Play()
+	TweenService:Create(
+		onda,
+		TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Size = Vector3.new(0.02, anillo, anillo), Transparency = 1 }
+	):Play()
 	Debris:AddItem(onda, 0.3)
 
 	-- líneas de impacto (rayitas que salen disparadas, estilo anime)
@@ -100,7 +129,12 @@ function EfectosCombate.Impacto(posicion, tipo, color, critico)
 	for _ = 1, rayas do
 		local direccion = (mirando * CFrame.Angles(0, 0, math.random() * math.pi * 2)).RightVector
 		local largo = 1.5 + math.random() * (if fuerte then 3 else 1.5)
-		local raya = pieza({ Size = Vector3.new(0.12, 0.12, largo), CFrame = CFrame.lookAt(posicion, posicion + direccion) * CFrame.new(0, 0, -largo / 2), Color = Color3.new(1, 1, 1), Transparency = 0 })
+		local raya = pieza({
+			Size = Vector3.new(0.12, 0.12, largo),
+			CFrame = CFrame.lookAt(posicion, posicion + direccion) * CFrame.new(0, 0, -largo / 2),
+			Color = Color3.new(1, 1, 1),
+			Transparency = 0,
+		})
 		TweenService:Create(raya, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			CFrame = CFrame.lookAt(posicion, posicion + direccion) * CFrame.new(0, 0, -largo * 1.6),
 			Size = Vector3.new(0.02, 0.02, largo * 0.4),
@@ -127,15 +161,29 @@ function EfectosCombate.Impacto(posicion, tipo, color, critico)
 
 	-- en el golpe cargado, onda de choque en el suelo
 	if tipo == "Pesado" then
-		local suelo = pieza({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.15, 2, 2), CFrame = CFrame.new(posicion - Vector3.new(0, 2.6, 0)) * CFrame.Angles(0, 0, math.pi / 2), Color = color, Transparency = 0.3 })
-		TweenService:Create(suelo, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.05, 22, 22), Transparency = 1 }):Play()
+		local suelo = pieza({
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.15, 2, 2),
+			CFrame = CFrame.new(posicion - Vector3.new(0, 2.6, 0)) * CFrame.Angles(0, 0, math.pi / 2),
+			Color = color,
+			Transparency = 0.3,
+		})
+		TweenService:Create(
+			suelo,
+			TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Size = Vector3.new(0.05, 22, 22), Transparency = 1 }
+		):Play()
 		Debris:AddItem(suelo, 0.4)
 	end
 end
 
 -- Número de daño flotante
 function EfectosCombate.Numero(posicion, dano, critico)
-	local ancla = pieza({ Size = Vector3.one * 0.1, CFrame = CFrame.new(posicion + Vector3.new((math.random() - 0.5) * 2, 0.5, (math.random() - 0.5) * 2)), Transparency = 1 })
+	local ancla = pieza({
+		Size = Vector3.one * 0.1,
+		CFrame = CFrame.new(posicion + Vector3.new((math.random() - 0.5) * 2, 0.5, (math.random() - 0.5) * 2)),
+		Transparency = 1,
+	})
 	local cartel = Instance.new("BillboardGui")
 	cartel.Size = UDim2.fromOffset(160, 60)
 	cartel.AlwaysOnTop = true
@@ -152,11 +200,25 @@ function EfectosCombate.Numero(posicion, dano, critico)
 	texto.TextStrokeColor3 = if critico then Color3.fromRGB(120, 40, 0) else Color3.fromRGB(20, 20, 30)
 	texto.TextStrokeTransparency = 0
 	texto.Parent = cartel
+	local degradado = Instance.new("UIGradient")
+	degradado.Rotation = 90
+	degradado.Color = if critico
+		then ColorSequence.new(Color3.fromRGB(255, 245, 190), Color3.fromRGB(255, 170, 40))
+		else ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(140, 215, 255))
+	degradado.Parent = texto
 	local escala = Instance.new("UIScale")
 	escala.Scale = if critico then 1.5 else 0.6
 	escala.Parent = texto
-	TweenService:Create(escala, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = if critico then 1.15 else 0.85 }):Play()
-	TweenService:Create(ancla, TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = ancla.CFrame + Vector3.new(0, 3.5, 0) }):Play()
+	TweenService:Create(
+		escala,
+		TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ Scale = if critico then 1.15 else 0.85 }
+	):Play()
+	TweenService:Create(
+		ancla,
+		TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ CFrame = ancla.CFrame + Vector3.new(0, 3.5, 0) }
+	):Play()
 	task.delay(0.45, function()
 		TweenService:Create(texto, TweenInfo.new(0.35), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
 	end)
@@ -183,9 +245,19 @@ function EfectosCombate.GolpeFOV(cantidad)
 		return
 	end
 	local base = camara.FieldOfView
-	TweenService:Create(camara, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { FieldOfView = base + cantidad }):Play()
+	TweenService:Create(
+		camara,
+		TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ FieldOfView = base + cantidad }
+	):Play()
 	task.delay(0.08, function()
-		TweenService:Create(camara, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { FieldOfView = base }):Play()
+		TweenService
+			:Create(
+				camara,
+				TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ FieldOfView = base }
+			)
+			:Play()
 	end)
 end
 

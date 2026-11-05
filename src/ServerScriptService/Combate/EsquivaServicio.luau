@@ -72,9 +72,7 @@ local function alPedirEsquiva(jugador, direccion, tipo)
 
 	-- Avisar a los DEMÁS jugadores para que vean la voltereta
 	local raiz = personaje:FindFirstChild("HumanoidRootPart")
-	local direccionFinal = limpiarDireccion(direccion)
-		or (raiz and -raiz.CFrame.LookVector)
-		or Vector3.new(0, 0, -1)
+	local direccionFinal = limpiarDireccion(direccion) or (raiz and -raiz.CFrame.LookVector) or Vector3.new(0, 0, -1)
 	for _, otro in Players:GetPlayers() do
 		if otro ~= jugador then
 			RemotoEfecto:FireClient(otro, personaje, direccionFinal, tipo)
@@ -96,7 +94,12 @@ function EsquivaServicio.EsInvulnerable(personaje)
 end
 
 function EsquivaServicio.Iniciar()
-	RemotoEsquivar.OnServerEvent:Connect(alPedirEsquiva)
+	RemotoEsquivar.OnServerEvent:Connect(function(jugador, ...)
+		if jugador:GetAttribute("EnMenu") then
+			return -- todavía en la pantalla de inicio
+		end
+		alPedirEsquiva(jugador, ...)
+	end)
 	Players.PlayerRemoving:Connect(function(jugador)
 		ultimaEsquiva[jugador] = nil
 	end)

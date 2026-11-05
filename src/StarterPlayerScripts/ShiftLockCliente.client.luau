@@ -51,7 +51,7 @@ borde.Transparency = 0.4
 borde.Parent = mira
 
 local function suspendido()
-	if jugador:GetAttribute("MenuAbierto") then
+	if jugador:GetAttribute("MenuAbierto") or jugador:GetAttribute("EnMenu") then
 		return true
 	end
 	local camara = Workspace.CurrentCamera
@@ -69,6 +69,9 @@ local function soltar(humanoide)
 end
 
 UserInputService.InputBegan:Connect(function(entrada, procesado)
+	if game:GetService("Players").LocalPlayer:GetAttribute("EnMenu") then
+		return -- en la pantalla de inicio no se juega
+	end
 	if procesado or UserInputService:GetFocusedTextBox() then
 		return
 	end

@@ -22,6 +22,7 @@ local Combate = ReplicatedStorage:WaitForChild("Combate")
 local Animador = require(Combate:WaitForChild("Animador"))
 local Anims = require(Combate:WaitForChild("Animaciones"):WaitForChild("SinArmas"))
 local Efectos = require(Combate:WaitForChild("EfectosCombate"))
+local EstiloKi = require(Combate:WaitForChild("EstiloKi"))
 local Controles = require(Combate:WaitForChild("Controles"))
 local ArmasConfig = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("ArmasConfig"))
 
@@ -31,7 +32,7 @@ local RemoteEfecto = Remotes:WaitForChild("EfectoCombate")
 
 local jugador = Players.LocalPlayer
 local ARMA = ArmasConfig.SinArmas
-local COLOR_AURA = Color3.fromRGB(150, 225, 255) -- celeste: el Ki de Sin armas
+local COLOR_AURA = EstiloKi.COLOR -- celeste: el Ki de Sin armas
 
 -- ===== Estado local =====
 local miAnimador = nil
@@ -130,7 +131,8 @@ local function aura(personaje, encendida, intensidad)
 		llamas.Shape = Enum.ParticleEmitterShape.Cylinder
 		llamas.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
 		llamas.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 0) })
-		llamas.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) })
+		llamas.Transparency =
+			NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) })
 		llamas.Rate = 40
 		llamas.Parent = adjunto
 		local chispas = Instance.new("ParticleEmitter")
@@ -255,7 +257,10 @@ local function actualizarCamaraFijada(dt)
 		end
 		local derecha = plano:Cross(Vector3.yAxis)
 		local camara = Workspace.CurrentCamera
-		local deseada = CFrame.lookAt(raiz.Position - plano * 13 + Vector3.new(0, 5, 0) + derecha * 2.5, raizEnemigo.Position + Vector3.new(0, 1, 0))
+		local deseada = CFrame.lookAt(
+			raiz.Position - plano * 13 + Vector3.new(0, 5, 0) + derecha * 2.5,
+			raizEnemigo.Position + Vector3.new(0, 1, 0)
+		)
 		camara.CFrame = camara.CFrame:Lerp(deseada, math.min(1, dt * 10))
 	end
 end
@@ -265,6 +270,9 @@ local function entrarCombate()
 	enCombateHasta = os.clock() + ArmasConfig.TIEMPO_EN_COMBATE
 	if miAnimador then
 		miAnimador:Postura(Anims.GUARDIA, 0.18)
+	end
+	if jugador.Character then
+		EstiloKi.EnCombate(jugador.Character, true)
 	end
 end
 
@@ -356,6 +364,7 @@ local function animarGolpe(personaje, idAnim, velocidad)
 		return
 	end
 	local raiz = personaje:FindFirstChild("HumanoidRootPart")
+	EstiloKi.EnCombate(personaje, true)
 	animador:Reproducir(anim, {
 		velocidad = velocidad or 1,
 		alEvento = function(nombre, evento)
@@ -363,6 +372,12 @@ local function animarGolpe(personaje, idAnim, velocidad)
 				Efectos.Sonido(raiz, if evento.fuerte then "SilbidoFuerte" else "Silbido")
 			elseif nombre == "pisada" then
 				Efectos.Sonido(raiz, "Pisada")
+			elseif nombre == "estela" then
+				EstiloKi.Estela(personaje, evento.miembro, (evento.duracion or 0.3) / (velocidad or 1))
+			elseif nombre == "onda" then
+				EstiloKi.Onda(personaje, evento.miembro, evento.grande)
+			elseif nombre == "fantasma" then
+				EstiloKi.Fantasma(personaje)
 			end
 		end,
 	})
@@ -436,6 +451,7 @@ local function soltarCarga()
 	end
 	miAnimador:Temblar(0)
 	aura(personaje, false)
+	EstiloKi.Sello(personaje, nil)
 	RemoteCombate:FireServer("Pesado")
 	local golpe = ARMA.Pesado
 	finGolpe = os.clock() + golpe.Duracion
@@ -492,6 +508,9 @@ local function clicEnBoton(entrada)
 end
 
 UserInputService.InputBegan:Connect(function(entrada, procesado)
+	if game:GetService("Players").LocalPlayer:GetAttribute("EnMenu") then
+		return -- en la pantalla de inicio no se juega
+	end
 	if procesado then
 		local raton = entrada.UserInputType == Enum.UserInputType.MouseButton1
 			or entrada.UserInputType == Enum.UserInputType.MouseButton2
@@ -573,8 +592,16 @@ RemoteEfecto.OnClientEvent:Connect(function(tipo, a, b, c)
 		local raizObjetivo = objetivoGolpe:FindFirstChild("HumanoidRootPart")
 		local congelado = ArmasConfig.HITSTOP[if datos.tipo == "Pesado" then "Pesado" else datos.reaccion] or 0.05
 		Efectos.Impacto(datos.posicion, datos.tipo, COLOR_AURA, datos.critico)
+		if datos.tipo == "Pesado" then
+			EstiloKi.Estallido(datos.posicion, 1)
+		elseif datos.reaccion == "Lanzado" then
+			EstiloKi.Estallido(datos.posicion, 0.45)
+		end
 		Efectos.Numero(datos.posicion, datos.dano, datos.critico)
-		Efectos.Sonido(raizObjetivo, if datos.tipo == "Patada" then "Patada" elseif datos.tipo == "Pesado" then "Pesado" else "Puno")
+		Efectos.Sonido(
+			raizObjetivo,
+			if datos.tipo == "Patada" then "Patada" elseif datos.tipo == "Pesado" then "Pesado" else "Puno"
+		)
 		if datos.critico then
 			Efectos.Sonido(raizObjetivo, "Hueso")
 		end
@@ -606,6 +633,9 @@ end)
 -- ===== Bucle =====
 
 local function prepararPersonaje(personaje)
+	if miAnimador and miAnimador.personaje then
+		EstiloKi.Sello(miAnimador.personaje, nil)
+	end
 	miAnimador = nil
 	indice, finGolpe, pendiente, cargando = 0, 0, nil, false
 	soltarObjetivo()
@@ -656,6 +686,7 @@ RunService.RenderStepped:Connect(function(dt)
 		local personaje = jugador.Character
 		if personaje then
 			aura(personaje, true, carga)
+			EstiloKi.Sello(personaje, carga)
 		end
 		if carga >= 1 then
 			Efectos.Temblor(0.12, 0.05)
@@ -672,6 +703,9 @@ RunService.RenderStepped:Connect(function(dt)
 		else
 			miAnimador:Postura(nil, 0.4)
 		end
+		if personaje then
+			EstiloKi.EnCombate(personaje, ahora < enCombateHasta)
+		end
 		-- los demás jugadores en combate también se ven en guardia
 		for _, otro in Players:GetPlayers() do
 			local otroPersonaje = otro.Character
@@ -683,6 +717,7 @@ RunService.RenderStepped:Connect(function(dt)
 					else
 						animOtro:Postura(nil, 0.4)
 					end
+					EstiloKi.EnCombate(otroPersonaje, otroPersonaje:GetAttribute("EnCombate") == true)
 				end
 			end
 		end

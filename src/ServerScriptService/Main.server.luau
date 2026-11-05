@@ -16,6 +16,8 @@ local EntrenamientoServicio = require(Combate.EntrenamientoServicio)
 local Progresion = script.Parent.Progresion
 local DatosServicio = require(Progresion.DatosServicio)
 local PersonajeServicio = require(Progresion.PersonajeServicio)
+local AparienciaServicio = require(Progresion.AparienciaServicio)
+local InicioServicio = require(Progresion.InicioServicio)
 
 local ClimaServicio = require(script.Parent.Mundo.ClimaServicio)
 local NPCServicio = require(script.Parent.Mundo.NPCServicio)
@@ -35,6 +37,8 @@ EstaminaServicio.Iniciar()
 EsquivaServicio.Iniciar()
 CorrerServicio.Iniciar()
 PersonajeServicio.Iniciar() -- antes que DatosServicio, para no perderse el primer "Cargado"
+AparienciaServicio.Iniciar() -- antes que DatosServicio, por lo mismo
+InicioServicio.Iniciar()
 DatosServicio.Iniciar()
 CombateServicio.Iniciar()
 EntrenamientoServicio.Iniciar()

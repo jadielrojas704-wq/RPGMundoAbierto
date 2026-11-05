@@ -38,6 +38,9 @@ local function actualizar()
 end
 
 UserInputService.InputBegan:Connect(function(entrada, procesado)
+	if game:GetService("Players").LocalPlayer:GetAttribute("EnMenu") then
+		return -- en la pantalla de inicio no se juega
+	end
 	if procesado then
 		return -- escribiendo en el chat o en una ventana
 	end
