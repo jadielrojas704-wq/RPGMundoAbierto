@@ -19,7 +19,7 @@ local ORO = Color3.fromRGB(228, 184, 96)
 local KI = Color3.fromRGB(120, 210, 255)
 local TEXTO = Color3.fromRGB(238, 228, 208)
 
-local NOMBRE = "Reinos del Velo"
+local NOMBRE = "El Eclipse Eterno"
 local CONSEJOS = { "Cargando el mundo..." }
 
 local pantalla = Instance.new("ScreenGui")

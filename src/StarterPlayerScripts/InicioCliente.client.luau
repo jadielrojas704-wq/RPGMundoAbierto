@@ -1198,6 +1198,18 @@ local function jugar()
 		end
 	end
 	interfazRoblox(true)
+	-- la primera vez: cinemática del prólogo de la historia
+	if not estado.PrologoVisto then
+		local Prologo = require(ReplicatedStorage.Interfaz:WaitForChild("Prologo"))
+		pantalla:Destroy()
+		local ok, err = pcall(Prologo.Reproducir)
+		if not ok then
+			warn("[PROLOGO]", err)
+			camara.CameraType = Enum.CameraType.Custom
+		end
+		ReplicatedStorage.Remotes:WaitForChild("Historia"):FireServer("PrologoVisto")
+		return
+	end
 	task.wait(0.3)
 	tween(negro, 1, { BackgroundTransparency = 1 }).Completed:Wait()
 	pantalla:Destroy()

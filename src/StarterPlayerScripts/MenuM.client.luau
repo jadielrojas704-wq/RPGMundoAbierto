@@ -20,6 +20,8 @@ local Controles = require(ReplicatedStorage:WaitForChild("Combate"):WaitForChild
 local Config = ReplicatedStorage:WaitForChild("Config")
 local ProgresionConfig = require(Config:WaitForChild("ProgresionConfig"))
 local RazasConfig = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("RazasConfig"))
+local HistoriaConfig = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("HistoriaConfig"))
+local Pergamino = require(ReplicatedStorage:WaitForChild("Interfaz"):WaitForChild("Pergamino"))
 local ControlesConfig = require(Config:WaitForChild("ControlesConfig"))
 local RegionesConfig = require(Config:WaitForChild("RegionesConfig"))
 local Constantes = require(Config:WaitForChild("Constantes"))
@@ -814,13 +816,177 @@ end
 
 -- ===== MISIONES =====
 constructores.Misiones = function(padre)
-	Estilo.Texto(padre, {
-		Size = UDim2.fromScale(1, 1),
-		TextWrapped = true,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = C.textoSuave,
-		Text = "Aún no tienes misiones.\n\nPrueba el combate con los muñecos de entrenamiento que hay cerca del inicio.",
-	})
+	local d = datos()
+	local h = d and d.Historia or { Mision = 1, Textos = {} }
+	local lista = desplazable(padre, { Size = UDim2.fromScale(1, 1) })
+	Estilo.Lista(lista, 8)
+	local orden = 0
+	local function n()
+		orden += 1
+		return orden
+	end
+	local function parrafo(texto, color, tamano)
+		return Estilo.Texto(lista, {
+			LayoutOrder = n(),
+			Size = UDim2.new(1, -10, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			TextWrapped = true,
+			TextSize = tamano or 14,
+			TextColor3 = color or C.texto,
+			Text = texto,
+		})
+	end
+
+	-- misión actual
+	seccion(lista, HistoriaConfig.ACTO, n())
+	local mision = HistoriaConfig.Mision(h.Mision)
+	local tarjeta = Estilo.Marco(
+		lista,
+		{
+			LayoutOrder = n(),
+			Size = UDim2.new(1, -10, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundColor3 = C.panelClaro,
+		}
+	)
+	Estilo.Esquinas(tarjeta, 8)
+	Estilo.Borde(tarjeta, C.oro, 1, 0.3)
+	Estilo.Relleno(tarjeta, 12)
+	Estilo.Lista(tarjeta, 4)
+	if mision then
+		Estilo.Texto(
+			tarjeta,
+			{
+				LayoutOrder = 1,
+				Size = UDim2.new(1, 0, 0, 14),
+				TextSize = 11,
+				Font = Estilo.FUERTE,
+				TextColor3 = Color3.fromRGB(190, 150, 255),
+				Text = "MISIÓN " .. h.Mision .. " DE " .. #HistoriaConfig.MISIONES,
+			}
+		)
+		Estilo.Texto(
+			tarjeta,
+			{
+				LayoutOrder = 2,
+				Size = UDim2.new(1, 0, 0, 28),
+				Font = Estilo.TITULO,
+				TextSize = 26,
+				TextColor3 = C.oro,
+				Text = mision.titulo,
+			}
+		)
+		Estilo.Texto(
+			tarjeta,
+			{
+				LayoutOrder = 3,
+				Size = UDim2.new(1, 0, 0, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				TextWrapped = true,
+				TextSize = 14,
+				TextColor3 = C.textoSuave,
+				Text = mision.descripcion,
+			}
+		)
+		local progreso = if mision.objetivo.tipo == "Golpes"
+			then string.format(
+				" (%d/%d)",
+				math.min(h.Progreso or 0, mision.objetivo.cantidad),
+				mision.objetivo.cantidad
+			)
+			else ""
+		Estilo.Texto(
+			tarjeta,
+			{
+				LayoutOrder = 4,
+				Size = UDim2.new(1, 0, 0, 20),
+				Font = Estilo.FUERTE,
+				TextSize = 14,
+				Text = "◆  " .. mision.objetivo.texto .. progreso,
+			}
+		)
+	else
+		Estilo.Texto(
+			tarjeta,
+			{
+				LayoutOrder = 1,
+				Size = UDim2.new(1, 0, 0, 28),
+				Font = Estilo.TITULO,
+				TextSize = 26,
+				TextColor3 = C.oro,
+				Text = "Fin del Acto I",
+			}
+		)
+		Estilo.Texto(
+			tarjeta,
+			{
+				LayoutOrder = 2,
+				Size = UDim2.new(1, 0, 0, 20),
+				TextSize = 14,
+				TextColor3 = C.textoSuave,
+				Text = "La historia continúa en las próximas actualizaciones.",
+			}
+		)
+	end
+
+	-- completadas
+	if h.Mision > 1 then
+		seccion(lista, "Completadas", n())
+		for i = 1, math.min(h.Mision - 1, #HistoriaConfig.MISIONES) do
+			parrafo("✓  " .. HistoriaConfig.MISIONES[i].titulo, C.verde)
+		end
+	end
+
+	-- crónicas: los textos antiguos que ya has leído
+	seccion(lista, "Crónicas", n())
+	local leidos = 0
+	for id, texto in HistoriaConfig.TEXTOS do
+		if h.Textos and h.Textos[id] then
+			leidos += 1
+			local b = Estilo.Boton(
+				lista,
+				{ LayoutOrder = n(), Size = UDim2.new(1, -10, 0, 40), Text = "", BackgroundColor3 = C.panel }
+			)
+			Estilo.Borde(b, C.borde, 1)
+			Estilo.Texto(
+				b,
+				{
+					Position = UDim2.fromOffset(12, 3),
+					Size = UDim2.new(1, -24, 0, 18),
+					Font = Estilo.FUERTE,
+					TextSize = 14,
+					TextColor3 = C.oro,
+					Text = texto.titulo,
+				}
+			)
+			Estilo.Texto(
+				b,
+				{
+					Position = UDim2.fromOffset(12, 21),
+					Size = UDim2.new(1, -24, 0, 14),
+					TextSize = 11,
+					TextColor3 = C.textoSuave,
+					Text = texto.subtitulo or "",
+				}
+			)
+			b.MouseButton1Click:Connect(function()
+				Pergamino.Abrir(id, false)
+			end)
+		end
+	end
+	local total = 0
+	for _ in HistoriaConfig.TEXTOS do
+		total += 1
+	end
+	parrafo(
+		string.format(
+			"Textos encontrados: %d de %d. Búscalos en los santuarios de los Guardianes y en el Altar del Ascenso.",
+			leidos,
+			total
+		),
+		C.textoSuave,
+		12
+	)
 end
 
 -- ===== AJUSTES (teclas) =====

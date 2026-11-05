@@ -32,7 +32,7 @@ local DISTANCIA_EFECTOS = 160
 local MENSAJES_POR_SEGUNDO = 14
 local TOLERANCIA = 0.12 -- margen por el retraso de internet al encadenar golpes
 
-local DatosServicio, PersonajeServicio -- se cargan al iniciar (evita dependencias circulares)
+local DatosServicio, PersonajeServicio, MisionesServicio -- se cargan al iniciar (evita dependencias circulares)
 
 -- estado[jugador] = { indice, finGolpe, cargandoDesde, mensajes, ventana, enCombateHasta }
 local estado = {}
@@ -119,6 +119,7 @@ local function golpear(jugador, golpe, multiplicador)
 				if critico then
 					dano *= 1.5
 				end
+				dano *= jugador:GetAttribute("MultDanoRaza") or 1 -- p. ej. el vampiro al sol o de noche
 				dano *= 1 - math.clamp(objetivo:GetAttribute("ReduccionDano") or 0, 0, 0.9)
 				dano = math.max(1, math.floor(dano + 0.5))
 				humanoide:TakeDamage(dano)
@@ -173,6 +174,10 @@ local function golpear(jugador, golpe, multiplicador)
 				RemoteEfecto:FireClient(jugador, "Golpe", personaje, objetivo, datosGolpe)
 				avisarCerca(raizObjetivo.Position, jugador, "Golpe", personaje, objetivo, datosGolpe)
 
+				-- la historia cuenta los golpes (misión "El viejo ritual")
+				if MisionesServicio then
+					MisionesServicio.Evento(jugador, "Golpe")
+				end
 				-- usar el arma sube su maestría
 				if PersonajeServicio then
 					PersonajeServicio.DarExpOficio(
@@ -270,6 +275,7 @@ local ACCIONES = { Ligero = alLigero, Cargar = alCargar, Pesado = alPesado }
 function CombateServicio.Iniciar()
 	DatosServicio = require(script.Parent.Parent.Progresion.DatosServicio)
 	PersonajeServicio = require(script.Parent.Parent.Progresion.PersonajeServicio)
+	MisionesServicio = require(script.Parent.Parent.Historia.MisionesServicio)
 
 	local function alEntrar(jugador)
 		estado[jugador] =

@@ -69,6 +69,7 @@ local function estado(jugador)
 		Giros = table.clone(d.Giros),
 		Apariencia = table.clone(d.Apariencia),
 		Creado = d.Creado,
+		PrologoVisto = d.Historia and d.Historia.PrologoVisto,
 	}
 end
 

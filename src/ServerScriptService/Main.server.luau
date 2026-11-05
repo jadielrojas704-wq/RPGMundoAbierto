@@ -18,6 +18,8 @@ local DatosServicio = require(Progresion.DatosServicio)
 local PersonajeServicio = require(Progresion.PersonajeServicio)
 local AparienciaServicio = require(Progresion.AparienciaServicio)
 local InicioServicio = require(Progresion.InicioServicio)
+local RazaServicio = require(Progresion.RazaServicio)
+local MisionesServicio = require(script.Parent.Historia.MisionesServicio)
 
 local ClimaServicio = require(script.Parent.Mundo.ClimaServicio)
 local NPCServicio = require(script.Parent.Mundo.NPCServicio)
@@ -39,11 +41,13 @@ CorrerServicio.Iniciar()
 PersonajeServicio.Iniciar() -- antes que DatosServicio, para no perderse el primer "Cargado"
 AparienciaServicio.Iniciar() -- antes que DatosServicio, por lo mismo
 InicioServicio.Iniciar()
+MisionesServicio.Iniciar() -- antes que DatosServicio (escucha "Cargado"); construye santuarios y Custodio
 DatosServicio.Iniciar()
 CombateServicio.Iniciar()
 EntrenamientoServicio.Iniciar()
 ClimaServicio.Iniciar()
 NPCServicio.Iniciar()
+RazaServicio.Iniciar()
 
 print("[SERVIDOR] Juego iniciado. Nivel máximo:", Constantes.NIVEL_MAXIMO)
 print("[SERVIDOR] Armas cargadas:", #Constantes.ARMAS)

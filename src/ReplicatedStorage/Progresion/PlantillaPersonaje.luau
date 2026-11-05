@@ -99,6 +99,9 @@ function Plantilla.Nueva()
 		CodigosUsados = {}, -- { [CODIGO] = true }
 		Creado = false, -- pasa a true la primera vez que pulsa Jugar
 
+		-- Historia principal (El Eclipse Eterno): misión actual, contador y textos leídos
+		Historia = { Mision = 1, Progreso = 0, Textos = {}, PrologoVisto = false },
+
 		-- Datos internos
 		Registro = { Creado = os.time(), TiempoJugado = 0, UltimaConexion = os.time() },
 	}

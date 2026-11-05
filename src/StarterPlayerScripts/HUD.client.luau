@@ -22,10 +22,11 @@ pantalla.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 pantalla.Parent = jugador:WaitForChild("PlayerGui")
 -- el HUD no se ve en la pantalla de inicio
 local function verHUD()
-	pantalla.Enabled = jugador:GetAttribute("EnMenu") ~= true
+	pantalla.Enabled = jugador:GetAttribute("EnMenu") ~= true and not jugador:GetAttribute("EnCinematica")
 end
 verHUD()
 jugador:GetAttributeChangedSignal("EnMenu"):Connect(verHUD)
+jugador:GetAttributeChangedSignal("EnCinematica"):Connect(verHUD)
 
 -- ===== Panel de abajo a la izquierda: nivel + barras =====
 local panel = Estilo.Marco(pantalla, {
@@ -42,42 +43,33 @@ local medalla = Estilo.Marco(
 )
 Estilo.Esquinas(medalla, 32)
 Estilo.Borde(medalla, C.oro, 2)
-local textoNivel = Estilo.Texto(
-	medalla,
-	{
-		Size = UDim2.new(1, 0, 0, 30),
-		Position = UDim2.fromOffset(0, 12),
-		Font = Estilo.TITULO,
-		TextSize = 28,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = C.oro,
-		Text = "1",
-	}
-)
-Estilo.Texto(
-	medalla,
-	{
-		Size = UDim2.new(1, 0, 0, 12),
-		Position = UDim2.fromOffset(0, 41),
-		Font = Estilo.FUERTE,
-		TextSize = 10,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = C.textoSuave,
-		Text = "NIVEL",
-	}
-)
+local textoNivel = Estilo.Texto(medalla, {
+	Size = UDim2.new(1, 0, 0, 30),
+	Position = UDim2.fromOffset(0, 12),
+	Font = Estilo.TITULO,
+	TextSize = 28,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	TextColor3 = C.oro,
+	Text = "1",
+})
+Estilo.Texto(medalla, {
+	Size = UDim2.new(1, 0, 0, 12),
+	Position = UDim2.fromOffset(0, 41),
+	Font = Estilo.FUERTE,
+	TextSize = 10,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	TextColor3 = C.textoSuave,
+	Text = "NIVEL",
+})
 
-local nombre = Estilo.Texto(
-	panel,
-	{
-		Position = UDim2.fromOffset(76, 4),
-		Size = UDim2.fromOffset(250, 18),
-		Font = Estilo.FUERTE,
-		TextSize = 15,
-		TextStrokeTransparency = 0.5,
-		Text = jugador.DisplayName,
-	}
-)
+local nombre = Estilo.Texto(panel, {
+	Position = UDim2.fromOffset(76, 4),
+	Size = UDim2.fromOffset(250, 18),
+	Font = Estilo.FUERTE,
+	TextSize = 15,
+	TextStrokeTransparency = 0.5,
+	Text = jugador.DisplayName,
+})
 local _, rellenoVida, textoVida =
 	Estilo.Barra(panel, { Position = UDim2.fromOffset(76, 25), Size = UDim2.fromOffset(250, 16) }, C.vida, true)
 local _, rellenoMana, textoMana =
@@ -93,32 +85,26 @@ local fondoExp, rellenoExp = Estilo.Barra(
 	C.exp,
 	false
 )
-local textoExp = Estilo.Texto(
-	pantalla,
-	{
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -20, 1, -11),
-		Size = UDim2.fromOffset(240, 14),
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextSize = 11,
-		TextColor3 = C.textoSuave,
-		TextStrokeTransparency = 0.6,
-		Text = "",
-	}
-)
+local textoExp = Estilo.Texto(pantalla, {
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(1, -20, 1, -11),
+	Size = UDim2.fromOffset(240, 14),
+	TextXAlignment = Enum.TextXAlignment.Right,
+	TextSize = 11,
+	TextColor3 = C.textoSuave,
+	TextStrokeTransparency = 0.6,
+	Text = "",
+})
 local _ = fondoExp
 
 -- ===== Oro (arriba a la derecha) =====
-local cajaOro = Estilo.Marco(
-	pantalla,
-	{
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -18, 0, 12),
-		Size = UDim2.fromOffset(150, 34),
-		BackgroundColor3 = C.fondo,
-		BackgroundTransparency = 0.25,
-	}
-)
+local cajaOro = Estilo.Marco(pantalla, {
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -18, 0, 12),
+	Size = UDim2.fromOffset(150, 34),
+	BackgroundColor3 = C.fondo,
+	BackgroundTransparency = 0.25,
+})
 Estilo.Esquinas(cajaOro, 17)
 Estilo.Borde(cajaOro, C.oroOscuro, 1)
 local moneda = Estilo.Marco(
@@ -127,29 +113,23 @@ local moneda = Estilo.Marco(
 )
 Estilo.Esquinas(moneda, 10)
 Estilo.Borde(moneda, Color3.fromRGB(255, 230, 150), 1)
-local textoOro = Estilo.Texto(
-	cajaOro,
-	{
-		Position = UDim2.fromOffset(34, 0),
-		Size = UDim2.new(1, -42, 1, 0),
-		Font = Estilo.FUERTE,
-		TextSize = 17,
-		TextColor3 = C.oro,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		Text = "0",
-	}
-)
+local textoOro = Estilo.Texto(cajaOro, {
+	Position = UDim2.fromOffset(34, 0),
+	Size = UDim2.new(1, -42, 1, 0),
+	Font = Estilo.FUERTE,
+	TextSize = 17,
+	TextColor3 = C.oro,
+	TextXAlignment = Enum.TextXAlignment.Right,
+	Text = "0",
+})
 
 -- ===== Ranuras de habilidades (abajo en el centro) =====
-local barraHabilidades = Estilo.Marco(
-	pantalla,
-	{
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -22),
-		Size = UDim2.fromOffset(5 * 56 + 4 * 8, 56),
-		BackgroundTransparency = 1,
-	}
-)
+local barraHabilidades = Estilo.Marco(pantalla, {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -22),
+	Size = UDim2.fromOffset(5 * 56 + 4 * 8, 56),
+	BackgroundTransparency = 1,
+})
 local disposicion = Instance.new("UIListLayout")
 disposicion.FillDirection = Enum.FillDirection.Horizontal
 disposicion.Padding = UDim.new(0, 8)
@@ -162,45 +142,36 @@ for i, accion in { "HabilidadQ", "HabilidadE", "HabilidadR", "HabilidadF", "Ulti
 	)
 	Estilo.Esquinas(ranura, 8)
 	Estilo.Borde(ranura, if accion == "Ultimate" then C.oro else C.borde, if accion == "Ultimate" then 2 else 1)
-	local tecla = Estilo.Texto(
-		ranura,
-		{
-			Position = UDim2.fromOffset(5, 3),
-			Size = UDim2.fromOffset(46, 14),
-			Font = Estilo.FUERTE,
-			TextSize = 12,
-			TextColor3 = C.oro,
-			Text = "",
-		}
-	)
-	Estilo.Texto(
-		ranura,
-		{
-			Position = UDim2.fromOffset(0, 22),
-			Size = UDim2.new(1, 0, 0, 24),
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextSize = 10,
-			TextColor3 = C.textoSuave,
-			TextWrapped = true,
-			Text = "Bloqueada",
-		}
-	)
+	local tecla = Estilo.Texto(ranura, {
+		Position = UDim2.fromOffset(5, 3),
+		Size = UDim2.fromOffset(46, 14),
+		Font = Estilo.FUERTE,
+		TextSize = 12,
+		TextColor3 = C.oro,
+		Text = "",
+	})
+	Estilo.Texto(ranura, {
+		Position = UDim2.fromOffset(0, 22),
+		Size = UDim2.new(1, 0, 0, 24),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextSize = 10,
+		TextColor3 = C.textoSuave,
+		TextWrapped = true,
+		Text = "Bloqueada",
+	})
 	ranuras[accion] = tecla
 end
 
-local ayuda = Estilo.Texto(
-	pantalla,
-	{
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -18, 0, 52),
-		Size = UDim2.fromOffset(260, 16),
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextSize = 12,
-		TextColor3 = C.textoSuave,
-		TextStrokeTransparency = 0.6,
-		Text = "",
-	}
-)
+local ayuda = Estilo.Texto(pantalla, {
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -18, 0, 52),
+	Size = UDim2.fromOffset(260, 16),
+	TextXAlignment = Enum.TextXAlignment.Right,
+	TextSize = 12,
+	TextColor3 = C.textoSuave,
+	TextStrokeTransparency = 0.6,
+	Text = "",
+})
 
 local function refrescarTeclas()
 	for accion, etiqueta in ranuras do

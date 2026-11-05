@@ -76,6 +76,19 @@ RazasConfig.RAZAS = {
 	},
 }
 
+-- La maldición del Vampiro (decidida por el usuario el 4 nov 2026): los primeros humanos
+-- tocados por el Eclipse. El sol los quema; de noche son más fuertes y se regeneran.
+-- La aplica ServerScriptService/Progresion/RazaServicio.
+RazasConfig.VAMPIRO = {
+	DIA_DESDE = 6.5, -- hora del juego en la que sale el sol
+	DIA_HASTA = 18, -- hora en la que se pone
+	QUEMA_POR_SEGUNDO = 0.012, -- parte de la vida máxima que pierde al sol cada segundo
+	VIDA_MINIMA = 0.2, -- el sol nunca lo deja por debajo de esto (no lo mata)
+	DANO_AL_SOL = 0.85, -- multiplicador de su daño a pleno sol
+	DANO_DE_NOCHE = 1.15, -- multiplicador de su daño de noche
+	REGENERA_DE_NOCHE = 0.01, -- parte de la vida máxima que recupera cada segundo de noche
+}
+
 -- Afinidad mágica principal (los 7 elementos del juego)
 RazasConfig.AFINIDADES = {
 	{ id = "Fuego", nombre = "Fuego", rareza = "Comun", probabilidad = 20, color = Color3.fromRGB(255, 120, 50) },
