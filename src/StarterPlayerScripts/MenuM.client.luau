@@ -21,6 +21,8 @@ local Config = ReplicatedStorage:WaitForChild("Config")
 local ProgresionConfig = require(Config:WaitForChild("ProgresionConfig"))
 local RazasConfig = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("RazasConfig"))
 local HistoriaConfig = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("HistoriaConfig"))
+local Idioma = require(ReplicatedStorage.Config:WaitForChild("Idioma"))
+local T = Idioma.T
 local Pergamino = require(ReplicatedStorage:WaitForChild("Interfaz"):WaitForChild("Pergamino"))
 local ControlesConfig = require(Config:WaitForChild("ControlesConfig"))
 local RegionesConfig = require(Config:WaitForChild("RegionesConfig"))
@@ -838,7 +840,7 @@ constructores.Misiones = function(padre)
 	end
 
 	-- misión actual
-	seccion(lista, HistoriaConfig.ACTO, n())
+	seccion(lista, T(HistoriaConfig.ACTO), n())
 	local mision = HistoriaConfig.Mision(h.Mision)
 	local tarjeta = Estilo.Marco(
 		lista,
@@ -862,7 +864,7 @@ constructores.Misiones = function(padre)
 				TextSize = 11,
 				Font = Estilo.FUERTE,
 				TextColor3 = Color3.fromRGB(190, 150, 255),
-				Text = "MISIÓN " .. h.Mision .. " DE " .. #HistoriaConfig.MISIONES,
+				Text = Idioma.Elegir("MISIÓN ", "QUEST ") .. h.Mision .. Idioma.Elegir(" DE ", " OF ") .. #HistoriaConfig.MISIONES,
 			}
 		)
 		Estilo.Texto(
@@ -873,7 +875,7 @@ constructores.Misiones = function(padre)
 				Font = Estilo.TITULO,
 				TextSize = 26,
 				TextColor3 = C.oro,
-				Text = mision.titulo,
+				Text = T(mision.titulo),
 			}
 		)
 		Estilo.Texto(
@@ -885,7 +887,7 @@ constructores.Misiones = function(padre)
 				TextWrapped = true,
 				TextSize = 14,
 				TextColor3 = C.textoSuave,
-				Text = mision.descripcion,
+				Text = T(mision.descripcion),
 			}
 		)
 		local progreso = if mision.objetivo.tipo == "Golpes"
@@ -902,7 +904,7 @@ constructores.Misiones = function(padre)
 				Size = UDim2.new(1, 0, 0, 20),
 				Font = Estilo.FUERTE,
 				TextSize = 14,
-				Text = "◆  " .. mision.objetivo.texto .. progreso,
+				Text = "◆  " .. T(mision.objetivo.texto) .. progreso,
 			}
 		)
 	else
@@ -933,7 +935,7 @@ constructores.Misiones = function(padre)
 	if h.Mision > 1 then
 		seccion(lista, "Completadas", n())
 		for i = 1, math.min(h.Mision - 1, #HistoriaConfig.MISIONES) do
-			parrafo("✓  " .. HistoriaConfig.MISIONES[i].titulo, C.verde)
+			parrafo("✓  " .. T(HistoriaConfig.MISIONES[i].titulo), C.verde)
 		end
 	end
 
@@ -956,7 +958,7 @@ constructores.Misiones = function(padre)
 					Font = Estilo.FUERTE,
 					TextSize = 14,
 					TextColor3 = C.oro,
-					Text = texto.titulo,
+					Text = T(texto.titulo),
 				}
 			)
 			Estilo.Texto(
@@ -994,7 +996,33 @@ local esperandoTecla = nil -- acción que espera una tecla nueva
 constructores.Ajustes = function(padre)
 	local lista = desplazable(padre, { Size = UDim2.new(1, 0, 1, -50) })
 	Estilo.Lista(lista, 6)
-	seccion(lista, "Controles", 0)
+	-- Idioma de los subtítulos y textos (las voces siempre hablan en inglés). Se guarda.
+	seccion(lista, Idioma.Elegir("Idioma", "Language"), -20)
+	local filaIdioma = Estilo.Marco(lista, { LayoutOrder = -19, Size = UDim2.new(1, -8, 0, 40), BackgroundTransparency = 1 })
+	local actual = jugador:GetAttribute("Idioma") or "Auto"
+	for k, opcion in Idioma.OPCIONES do
+		local elegido = actual == opcion.id
+		local b = Estilo.Boton(filaIdioma, {
+			Position = UDim2.new((k - 1) / 3, 4, 0, 4),
+			Size = UDim2.new(1 / 3, -8, 0, 32),
+			Text = (if elegido then "✓  " else "") .. Idioma.Elegir(opcion.nombre, opcion.nombreEn),
+			BackgroundColor3 = if elegido then C.oroOscuro else C.panel,
+		})
+		Estilo.Borde(b, C.borde, 1)
+		b.MouseButton1Click:Connect(function()
+			RemoteTeclas:FireServer("Idioma", opcion.id)
+			jugador:SetAttribute("Idioma", opcion.id) -- se ve al momento (el servidor lo guarda)
+			task.defer(mostrar, "Ajustes")
+		end)
+	end
+	Estilo.Texto(lista, {
+		LayoutOrder = -18,
+		Size = UDim2.new(1, -8, 0, 18),
+		TextSize = 12,
+		TextColor3 = C.textoSuave,
+		Text = Idioma.Elegir("Subtítulos e historia en este idioma. Las voces siempre hablan en inglés.", "Subtitles and story in this language. Voices always speak English."),
+	})
+	seccion(lista, Idioma.Elegir("Controles", "Controls"), 0)
 	for i, accion in ControlesConfig.ORDEN do
 		local datosAccion = ControlesConfig.ACCIONES[accion]
 		local f =

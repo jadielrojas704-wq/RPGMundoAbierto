@@ -35,6 +35,7 @@ local Workspace = game:GetService("Workspace")
 
 local SonidosConfig = require(ReplicatedStorage.Config.SonidosConfig)
 local Voz = require(script.Parent.Voz)
+local Idioma = require(ReplicatedStorage.Config.Idioma)
 
 local Cinematica = {}
 
@@ -275,20 +276,21 @@ function Cinematica.Reproducir(tomas, opciones)
 
 	local subtitulo = Instance.new("TextLabel")
 	subtitulo.AnchorPoint = Vector2.new(0.5, 1)
-	subtitulo.Position = UDim2.new(0.5, 0, 1, -24)
-	subtitulo.Size = UDim2.new(0.8, 0, 0.1, -8)
+	subtitulo.Position = UDim2.new(0.5, 0, 1, -14)
+	subtitulo.Size = UDim2.new(0.86, 0, 0.115, -6)
 	subtitulo.BackgroundTransparency = 1
-	subtitulo.Font = Enum.Font.Garamond
+	subtitulo.Font = Enum.Font.SourceSansSemibold -- letra clara para leer rápido
 	subtitulo.TextScaled = true
 	subtitulo.TextColor3 = Color3.fromRGB(240, 232, 214)
-	subtitulo.TextStrokeTransparency = 0.6
+	subtitulo.TextStrokeTransparency = 0.35
 	subtitulo.TextTransparency = 1
 	subtitulo.RichText = true
 	subtitulo.Text = ""
 	subtitulo.ZIndex = 6
 	subtitulo.Parent = pantalla
 	local limite = Instance.new("UITextSizeConstraint")
-	limite.MaxTextSize = 30
+	limite.MaxTextSize = 34
+	limite.MinTextSize = 16
 	limite.Parent = subtitulo
 
 	local saltar = Instance.new("TextButton")
@@ -390,7 +392,12 @@ function Cinematica.Reproducir(tomas, opciones)
 			sonar(SonidosConfig.CINE.Corte, 0.18, 1, 8) -- ráfaga de viento en el corte
 		end
 		-- texto
-		subtitulo.Text = toma.texto or ""
+		-- subtítulo en el idioma del jugador (y el nombre de quien habla, en dorado)
+		local textoToma = Idioma.T(toma.texto or "")
+		if toma.quien and textoToma ~= "" then
+			textoToma = string.format('<font color="#E4B860"><b>%s</b></font>   %s', toma.quien, textoToma)
+		end
+		subtitulo.Text = textoToma
 		subtitulo.TextTransparency = 1
 		tween(subtitulo, 0.8, { TextTransparency = 0 })
 		if toma.alEmpezar then
@@ -509,7 +516,7 @@ function Cinematica.Reproducir(tomas, opciones)
 		sub.Position = UDim2.fromScale(0.5, 0.56)
 		sub.Size = UDim2.new(0.9, 0, 0, 30)
 		sub.TextSize = 22
-		sub.Text = opciones.subtitulo or ""
+		sub.Text = Idioma.T(opciones.subtitulo or "")
 		sub.Parent = pantalla
 		sonar(SonidosConfig.CINE.Golpe, 0.55, 0.85, 12) -- golpe épico del título
 		flash(Color3.fromRGB(255, 236, 200), 0.9, 1.4)

@@ -76,6 +76,45 @@ RazasConfig.RAZAS = {
 	},
 }
 
+-- ===== FÍSICO DE CADA RAZA (jugadores y NPC) =====
+-- Accesorios del catálogo de Roblox que se añaden al personaje según su raza:
+--   sombrero = cabeza (orejas, cuernos, aureola) · cara = boca (colmillos)
+--   espalda = alas · cintura = cola
+--   altura / ancho = tamaño del cuerpo · piel = color de piel forzado · barba = siempre con barba
+-- "variantes": se elige una (los hombres bestia pueden ser gato-zorro o lobo).
+-- Para cambiar un accesorio, pon otro número del catálogo (Avatar Shop > Accesorios).
+RazasConfig.RASGOS = {
+	Humano = {},
+	Elfo = { sombrero = { 115449057053074 }, altura = 1.05, ancho = 0.94 }, -- orejas puntiagudas, alto y esbelto
+	Enano = { altura = 0.84, ancho = 1.14, barba = true }, -- bajo, ancho y con barba
+	Bestia = {
+		variantes = {
+			{ sombrero = { 97704056587282 }, cintura = { 108495276113261 } }, -- orejas de gato y cola de zorro
+			{ sombrero = { 139076192190648 }, cintura = { 74693448079124 } }, -- orejas y cola de lobo
+		},
+		ancho = 1.04,
+	},
+	Vampiro = { cara = { 94743117396680 }, piel = Color3.fromRGB(206, 192, 198) }, -- colmillos y piel pálida
+	Draconido = { sombrero = { 96152329979108 }, cintura = { 131541613437135 }, altura = 1.04, ancho = 1.06 }, -- cuernos y cola de dragón
+	Celestial = { sombrero = { 79701908174596 }, espalda = { 81707530535586 } }, -- aureola y alas de ángel
+	Demonio = { sombrero = { 18181093613 }, cintura = { 132526951704680 }, altura = 1.03 }, -- cuernos y cola de demonio
+}
+
+-- Rasgos de una raza. "semilla" (un número) elige la variante, para que siempre sea la misma.
+function RazasConfig.Rasgos(raza, semilla)
+	local r = RazasConfig.RASGOS[raza] or {}
+	if r.variantes then
+		local v = r.variantes[((semilla or 0) % #r.variantes) + 1]
+		local copia = table.clone(r)
+		copia.variantes = nil
+		for k, valor in v do
+			copia[k] = valor
+		end
+		return copia
+	end
+	return r
+end
+
 -- La maldición del Vampiro (decidida por el usuario el 4 nov 2026): los primeros humanos
 -- tocados por el Eclipse. El sol los quema; de noche son más fuertes y se regeneran.
 -- La aplica ServerScriptService/Progresion/RazaServicio.

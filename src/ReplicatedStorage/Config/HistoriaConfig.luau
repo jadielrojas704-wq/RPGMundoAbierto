@@ -214,15 +214,13 @@ HistoriaConfig.MISIONES = {
 -- toma = qué enseña la cámara (la programa ReplicatedStorage/Interfaz/Despertar)
 -- quien = "Eldren" (habla con su voz) o nil (sin voz)
 HistoriaConfig.DESPERTAR = {
-	cartel = "DOS DÍAS DESPUÉS",
-	lugar = "Cabaña de Eldren · Valle de Aurelia",
 	lineas = {
 		{ toma = "Ojos", duracion = 5.5 },
-		{ toma = "Eldren", quien = "Eldren", texto = "Por fin abres los ojos. Llevas dos días dormido, forastero." },
+		{ toma = "Eldren", quien = "Eldren", texto = "Por fin abres los ojos. Tranquilo, estás a salvo." },
 		{
 			toma = "Fuego",
 			quien = "Eldren",
-			texto = "Te encontré junto al camino, la noche en que el cielo tembló. Ardías de fiebre... y en tu piel brillaba una luz morada.",
+			texto = "Te encontré inconsciente en el río, la noche en que el cielo tembló. Llevas dos días durmiendo en mi cabaña.",
 		},
 		{
 			toma = "Ventana",
@@ -232,7 +230,7 @@ HistoriaConfig.DESPERTAR = {
 		{
 			toma = "Levantarse",
 			quien = "Eldren",
-			texto = "No sé quién eres ni de dónde vienes. Pero esa luz te ha elegido... y eso nunca ocurre por azar.",
+			texto = "Cuando te saqué del agua, en tu piel brillaba una luz morada. Esa luz te ha elegido... y eso nunca ocurre por azar.",
 		},
 		{
 			toma = "Amuleto",

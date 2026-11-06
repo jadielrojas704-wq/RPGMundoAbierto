@@ -12,6 +12,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local HistoriaConfig = require(ReplicatedStorage.Config.HistoriaConfig)
 local Voz = require(script.Parent.Voz)
+local Idioma = require(ReplicatedStorage.Config.Idioma)
 
 local Pergamino = {}
 
@@ -107,7 +108,7 @@ function Pergamino.Abrir(idTexto, nuevo)
 		Size = UDim2.new(1, -60, 0, 38),
 		Font = Enum.Font.Garamond,
 		TextSize = 34,
-		Text = datos.titulo,
+		Text = Idioma.T(datos.titulo),
 	})
 	texto({
 		Position = UDim2.fromOffset(30, 62),
@@ -115,7 +116,7 @@ function Pergamino.Abrir(idTexto, nuevo)
 		Font = Enum.Font.GothamMedium,
 		TextSize = 13,
 		TextColor3 = Color3.fromRGB(120, 86, 46),
-		Text = datos.subtitulo or "",
+		Text = Idioma.T(datos.subtitulo or ""),
 	})
 	local adorno = Instance.new("Frame")
 	adorno.AnchorPoint = Vector2.new(0.5, 0)
@@ -131,7 +132,7 @@ function Pergamino.Abrir(idTexto, nuevo)
 		TextSize = 21,
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		Text = datos.texto,
+		Text = Idioma.T(datos.texto),
 		MaxVisibleGraphemes = 0,
 	})
 	if nuevo then
@@ -165,7 +166,7 @@ function Pergamino.Abrir(idTexto, nuevo)
 		:Play()
 
 	-- el texto aparece como si se escribiera
-	local total = utf8.len(datos.texto) or #datos.texto
+	local total = utf8.len(Idioma.T(datos.texto)) or #datos.texto
 	task.spawn(function()
 		local inicio = os.clock()
 		while gui.Parent and cuerpo.MaxVisibleGraphemes < total and cuerpo.MaxVisibleGraphemes ~= -1 do

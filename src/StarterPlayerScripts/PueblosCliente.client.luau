@@ -19,6 +19,7 @@ local RemoteHablar = Remotes:WaitForChild("HablarNPC")
 local RemoteBurbuja = Remotes:WaitForChild("BurbujaNPC")
 local TiendasConfig = require(ReplicatedStorage.Config:WaitForChild("TiendasConfig"))
 local Voz = require(ReplicatedStorage:WaitForChild("Interfaz"):WaitForChild("Voz"))
+local Idioma = require(ReplicatedStorage.Config:WaitForChild("Idioma"))
 
 local jugador = Players.LocalPlayer
 local pantallaJugador = jugador:WaitForChild("PlayerGui")
@@ -378,13 +379,13 @@ local function escribir(texto)
 	-- efecto de máquina de escribir
 	escribiendo += 1
 	local mio = escribiendo
-	dialogoTexto.Text = texto
+	dialogoTexto.Text = Idioma.T(texto)
 	dialogoTexto.MaxVisibleGraphemes = 0
 	-- el NPC lo dice en voz alta, con su propia voz
 	if npcActual then
 		task.spawn(Voz.Decir, texto, Voz.PerfilNPC(npcActual), "npc")
 	end
-	local total = utf8.len(texto) or #texto
+	local total = utf8.len(dialogoTexto.Text) or #texto
 	task.spawn(function()
 		for k = 1, total do
 			if escribiendo ~= mio then
@@ -426,6 +427,7 @@ local function frasesDe(npc)
 	end
 	local resultado = {}
 	for _, frase in lista do
+		-- se guarda la frase en español: al enseñarla se traduce (y la voz la dice en inglés)
 		table.insert(resultado, (string.gsub(frase, "{pueblo}", pueblo)))
 	end
 	return resultado
@@ -440,7 +442,7 @@ local function hablarCon(npc)
 	frases = frasesDe(npc)
 	indiceFrase = 1
 	dialogoNombre.Text = npc:GetAttribute("Nombre") or npc.Name
-	dialogoTitulo.Text = (npc:GetAttribute("Titulo") or "") .. " · " .. (npc:GetAttribute("PuebloNombre") or "")
+	dialogoTitulo.Text = Idioma.T(npc:GetAttribute("Titulo") or "") .. " · " .. (npc:GetAttribute("PuebloNombre") or "")
 	botonTienda.Visible = npc:GetAttribute("Tienda") ~= nil
 	botonSeguir.Visible = #frases > 1
 	escribir(frases[1])
@@ -569,7 +571,7 @@ RemoteBurbuja.OnClientEvent:Connect(function(npc, texto, duracion)
 		TextScaled = true,
 		TextWrapped = true,
 		TextColor3 = Color3.fromRGB(40, 30, 22),
-		Text = texto,
+		Text = Idioma.T(texto),
 	}, fondo)
 	crear("UITextSizeConstraint", { MaxTextSize = 22, MinTextSize = 12 }, etiqueta)
 	task.delay(duracion or 4, function()

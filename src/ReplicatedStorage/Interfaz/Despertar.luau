@@ -1,4 +1,4 @@
--- Cinemática del DESPERTAR (solo CLIENTE): "Dos días después..."
+-- Cinemática del DESPERTAR (solo CLIENTE): el jugador despierta en la cabaña de Eldren.
 -- Ruta en Studio: ReplicatedStorage/Interfaz/Despertar
 --
 -- Sale después del prólogo, la primera vez que se juega (misión 1 de la historia).
@@ -21,7 +21,6 @@ local Voz = require(script.Parent.Voz)
 
 local Despertar = {}
 
-local ORO = "#E4B860"
 local ANIM = {
 	Respirar = "rbxassetid://507766388", -- reposo de Roblox (R15)
 	Senalar = "rbxassetid://507770453", -- señalar (R15)
@@ -42,10 +41,10 @@ local function mirar(desde, hacia)
 	return CFrame.lookAt(desde, hacia)
 end
 
--- Pantalla negra con el cartel "DOS DÍAS DESPUÉS"
+-- Pantalla negra mientras se prepara la escena (sin cartel: el jugador simplemente abre los ojos)
 local function cartel(jugador)
 	local gui = Instance.new("ScreenGui")
-	gui.Name = "DosDiasDespues"
+	gui.Name = "NegroDespertar"
 	gui.IgnoreGuiInset = true
 	gui.DisplayOrder = 70
 	gui.ResetOnSpawn = false
@@ -55,41 +54,15 @@ local function cartel(jugador)
 	negro.BackgroundColor3 = Color3.new(0, 0, 0)
 	negro.BorderSizePixel = 0
 	negro.Parent = gui
-	local texto = Instance.new("TextLabel")
-	texto.AnchorPoint = Vector2.new(0.5, 0.5)
-	texto.Position = UDim2.fromScale(0.5, 0.47)
-	texto.Size = UDim2.new(0.8, 0, 0, 60)
-	texto.BackgroundTransparency = 1
-	texto.Font = Enum.Font.Garamond
-	texto.TextSize = 46
-	texto.TextColor3 = Color3.fromRGB(240, 228, 204)
-	texto.TextTransparency = 1
-	texto.Text = HistoriaConfig.DESPERTAR.cartel
-	texto.Parent = negro
-	local espaciado = Instance.new("UIGradient")
-	espaciado.Color = ColorSequence.new(Color3.fromRGB(255, 244, 214), Color3.fromRGB(228, 184, 96))
-	espaciado.Rotation = 90
-	espaciado.Parent = texto
-	local lugar = texto:Clone()
-	lugar.Position = UDim2.fromScale(0.5, 0.55)
-	lugar.TextSize = 20
-	lugar.Text = HistoriaConfig.DESPERTAR.lugar
-	lugar.Parent = negro
-	tween(texto, 1.6, { TextTransparency = 0 })
-	task.delay(0.6, function()
-		tween(lugar, 1.6, { TextTransparency = 0.25 })
-	end)
 	local inicio = os.clock()
-	-- quita el cartel (espera a que se haya podido leer: al menos 3,5 segundos)
+	-- un silencio breve en negro (como cuando uno despierta) y se aclara
 	return gui, function()
-		local falta = 3.5 - (os.clock() - inicio)
+		local falta = 1.5 - (os.clock() - inicio)
 		if falta > 0 then
 			task.wait(falta)
 		end
-		tween(texto, 0.8, { TextTransparency = 1 })
-		tween(lugar, 0.8, { TextTransparency = 1 }).Completed:Wait()
 		task.spawn(function()
-			tween(negro, 1.4, { BackgroundTransparency = 1 }).Completed:Wait()
+			tween(negro, 1.6, { BackgroundTransparency = 1 }).Completed:Wait()
 			gui:Destroy()
 		end)
 	end
@@ -344,10 +317,9 @@ function Despertar.Reproducir()
 	for _, linea in HistoriaConfig.DESPERTAR.lineas do
 		local toma = { duracion = linea.duracion or 4, fov = 62 }
 		if linea.texto then
-			toma.voz = linea.texto
-			toma.texto = if linea.quien
-				then string.format('<font color="%s">%s</font>   %s', ORO, linea.quien, linea.texto)
-				else linea.texto
+			toma.voz = linea.texto -- la voz lo dice en inglés
+			toma.texto = linea.texto -- el subtítulo sale en el idioma del jugador
+			toma.quien = linea.quien
 			toma.perfil = Voz.PERFILES[linea.quien or "Eldren"]
 		end
 		if linea.toma == "Ojos" then

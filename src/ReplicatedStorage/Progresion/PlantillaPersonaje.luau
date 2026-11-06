@@ -90,7 +90,7 @@ function Plantilla.Nueva()
 		Profesiones = profesiones, -- Herreria, Alquimia, Mineria, Encantamiento
 
 		-- Ajustes del jugador (teclas reasignadas, etc.)
-		Ajustes = { Teclas = {} },
+		Ajustes = { Teclas = {}, Idioma = "Auto" }, -- Idioma: "Auto" (el de Roblox), "es" o "en"
 
 		-- Aspecto (editor Personalizar, opciones en Config/AparienciaConfig)
 		Apariencia = AparienciaConfig.PorDefecto(),

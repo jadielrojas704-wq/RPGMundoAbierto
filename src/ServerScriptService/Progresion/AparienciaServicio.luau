@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AparienciaConfig = require(ReplicatedStorage.Config.AparienciaConfig)
+local RazasConfig = require(ReplicatedStorage.Config.RazasConfig)
 local DatosServicio = require(script.Parent.DatosServicio)
 
 local AparienciaServicio = {}
@@ -24,7 +25,9 @@ local vistiendo = {} -- [jugador] = true mientras se aplica
 
 -- Crea la HumanoidDescription completa a partir de la apariencia guardada
 -- humano = true: cuerpo realista (NPC, Custodio, estatuas). Los jugadores siempre son blocky.
-function AparienciaServicio.Descripcion(apariencia, humano)
+-- raza: añade el físico de esa raza (orejas, cola, alas, cuernos...: RazasConfig.RASGOS).
+-- semilla: número que elige la variante de la raza (para que siempre sea la misma).
+function AparienciaServicio.Descripcion(apariencia, humano, raza, semilla)
 	local a = apariencia or AparienciaConfig.PorDefecto()
 	local genero = if a.Genero == "Mujer" then "Mujer" else "Hombre"
 	local ropa = AparienciaConfig.ROPA_POR_ID[a.Ropa] or AparienciaConfig.ROPA[1]
@@ -70,10 +73,39 @@ function AparienciaServicio.Descripcion(apariencia, humano)
 	if ropa.sombrero then
 		table.insert(sombreros, tostring(ropa.sombrero))
 	end
+	-- físico de la raza
+	local rasgos = RazasConfig.Rasgos(raza, semilla)
+	local espalda, cintura = {}, {}
+	if ropa.espalda then
+		table.insert(espalda, tostring(ropa.espalda))
+	end
+	for _, id in rasgos.sombrero or {} do
+		table.insert(sombreros, tostring(id))
+	end
+	for _, id in rasgos.cara or {} do
+		table.insert(deCara, tostring(id))
+	end
+	for _, id in rasgos.espalda or {} do
+		table.insert(espalda, tostring(id))
+	end
+	for _, id in rasgos.cintura or {} do
+		table.insert(cintura, tostring(id))
+	end
 	descripcion.FaceAccessory = table.concat(deCara, ",")
 	descripcion.HatAccessory = table.concat(sombreros, ",")
-	if ropa.espalda then
-		descripcion.BackAccessory = tostring(ropa.espalda)
+	descripcion.BackAccessory = table.concat(espalda, ",")
+	descripcion.WaistAccessory = table.concat(cintura, ",")
+	if rasgos.altura then
+		descripcion.HeightScale *= rasgos.altura
+	end
+	if rasgos.ancho then
+		descripcion.WidthScale *= rasgos.ancho
+		descripcion.DepthScale *= rasgos.ancho
+	end
+	if rasgos.piel then
+		for _, parte in { "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor", "LeftLegColor", "RightLegColor" } do
+			descripcion[parte] = rasgos.piel
+		end
 	end
 
 	-- ropa 3D por capas
@@ -116,7 +148,7 @@ local function vestir(jugador)
 		local personaje = jugador.Character
 		local humanoide = personaje and personaje:FindFirstChildOfClass("Humanoid")
 		if datos and humanoide and personaje.Parent then
-			local descripcion = AparienciaServicio.Descripcion(datos.Apariencia)
+			local descripcion = AparienciaServicio.Descripcion(datos.Apariencia, false, datos.Raza, jugador.UserId)
 			local ok, err = pcall(function()
 				humanoide:ApplyDescription(descripcion)
 			end)

@@ -249,7 +249,17 @@ end
 -- ===== Teclas del jugador (Menú M > Ajustes) =====
 
 local ultimoTeclas = {}
-local function alGuardarTeclas(jugador, teclas)
+local function alGuardarTeclas(jugador, teclas, valor)
+	-- también sirve para guardar el idioma: ("Idioma", "Auto" | "es" | "en")
+	if teclas == "Idioma" then
+		if type(valor) == "string" and (valor == "Auto" or valor == "es" or valor == "en") then
+			DatosServicio.Modificar(jugador, function(d)
+				d.Ajustes.Idioma = valor
+			end, true)
+			jugador:SetAttribute("Idioma", valor)
+		end
+		return
+	end
 	local ahora = os.clock()
 	if ahora - (ultimoTeclas[jugador] or 0) < 0.5 or type(teclas) ~= "table" then
 		return
@@ -342,6 +352,10 @@ end
 function PersonajeServicio.Iniciar()
 	DatosServicio.Cargado.Event:Connect(function(jugador)
 		jugador:SetAttribute("Mana", nil)
+		-- idioma elegido por el jugador (lo leen los subtítulos: ReplicatedStorage/Config/Idioma)
+		local datos = DatosServicio.Obtener(jugador)
+		local idioma = datos and datos.Ajustes and datos.Ajustes.Idioma
+		jugador:SetAttribute("Idioma", if idioma == "es" or idioma == "en" then idioma else "Auto")
 		PersonajeServicio.Aplicar(jugador)
 		local personaje = jugador.Character
 		if personaje then

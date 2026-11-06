@@ -13,6 +13,8 @@ local Workspace = game:GetService("Workspace")
 local Estilo = require(ReplicatedStorage:WaitForChild("Interfaz"):WaitForChild("Estilo"))
 local Pergamino = require(ReplicatedStorage.Interfaz:WaitForChild("Pergamino"))
 local Voz = require(ReplicatedStorage.Interfaz:WaitForChild("Voz"))
+local Idioma = require(ReplicatedStorage.Config:WaitForChild("Idioma"))
+local T = Idioma.T
 local HistoriaConfig = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("HistoriaConfig"))
 local Remoto = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Historia")
 
@@ -65,7 +67,7 @@ jugador:GetAttributeChangedSignal("EnCinematica"):Connect(visible)
 -- ===== Rastreador de la misión (arriba a la derecha) =====
 local rastreador = Estilo.Marco(pantalla, {
 	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -18, 0, 384), -- debajo del minimapa
+	Position = UDim2.new(1, -18, 0, 436), -- debajo del minimapa
 	Size = UDim2.fromOffset(300, 92),
 	BackgroundTransparency = 1,
 })
@@ -177,12 +179,12 @@ local function mostrarMision(info)
 		return
 	end
 	rastreador.Visible = true
-	textoActo.Text = string.upper(info.acto or "")
-	textoTitulo.Text = info.titulo or ""
+	textoActo.Text = string.upper(T(info.acto or ""))
+	textoTitulo.Text = T(info.titulo or "")
 	local progreso = if info.total and info.total > 1
 		then string.format("  (%d/%d)", info.hechos or 0, info.total)
 		else ""
-	textoObjetivo.Text = (info.objetivo or "") .. progreso
+	textoObjetivo.Text = T(info.objetivo or "") .. progreso
 	rombo.Visible = not info.fin
 	if info.destino then
 		ancla.Position = info.destino + Vector3.new(0, 7, 0)
@@ -194,6 +196,7 @@ end
 -- ===== Avisos de misión (arriba en el centro) =====
 local libreDesde = 0 -- los avisos salen uno detrás de otro
 local function aviso(cabecera, titulo, detalle, color)
+	cabecera, titulo, detalle = T(cabecera or ""), T(titulo or ""), T(detalle or "")
 	local espera = math.max(0, libreDesde - os.clock())
 	libreDesde = os.clock() + espera + 4.8
 	if espera > 0 then
@@ -254,13 +257,13 @@ local function textoRecompensa(r)
 		table.insert(partes, "+" .. r.Exp .. " EXP")
 	end
 	if r.Oro then
-		table.insert(partes, "+" .. r.Oro .. " de oro")
+		table.insert(partes, "+" .. r.Oro .. Idioma.Elegir(" de oro", " gold"))
 	end
 	if r.GirosRaza then
-		table.insert(partes, "+" .. r.GirosRaza .. " giro de raza")
+		table.insert(partes, "+" .. r.GirosRaza .. Idioma.Elegir(" giro de raza", " race spin"))
 	end
 	if r.GirosAfinidad then
-		table.insert(partes, "+" .. r.GirosAfinidad .. " giro de afinidad")
+		table.insert(partes, "+" .. r.GirosAfinidad .. Idioma.Elegir(" giro de afinidad", " affinity spin"))
 	end
 	return table.concat(partes, "   ·   ")
 end
@@ -319,14 +322,15 @@ local function mostrarLinea()
 		lineasActuales = nil
 		if #cola > 0 then
 			local siguiente = table.remove(cola, 1)
-			nombreHablante.Text = siguiente.nombre
+			nombreHablante.Text = T(siguiente.nombre)
 			lineasActuales, lineaActual = siguiente.lineas, 1
 			caja.Visible = true
 			mostrarLinea()
 		end
 		return
 	end
-	textoDialogo.Text = linea
+	local mostrado = T(linea) -- en el idioma del jugador (la voz, siempre en inglés)
+	textoDialogo.Text = mostrado
 	textoDialogo.MaxVisibleGraphemes = 0
 	escribiendo = true
 	-- cada personaje con su voz (el Custodio, de momento, es el que habla por el amuleto)
@@ -334,10 +338,10 @@ local function mostrarLinea()
 	sonido("rbxasset://sounds/clickfast.wav", 0.15)
 	task.spawn(function()
 		local inicio = os.clock()
-		local total = utf8.len(linea) or #linea
+		local total = utf8.len(mostrado) or #mostrado
 		while
 			escribiendo
-			and textoDialogo.Text == linea
+			and textoDialogo.Text == mostrado
 			and textoDialogo.MaxVisibleGraphemes ~= -1
 			and textoDialogo.MaxVisibleGraphemes < total
 		do
@@ -372,7 +376,7 @@ local function decir(nombre, lineas)
 	table.insert(cola, { nombre = nombre, lineas = lineas })
 	if not lineasActuales then
 		local siguiente = table.remove(cola, 1)
-		nombreHablante.Text = siguiente.nombre
+		nombreHablante.Text = T(siguiente.nombre)
 		lineasActuales, lineaActual = siguiente.lineas, 1
 		caja.Visible = true
 		mostrarLinea()
@@ -534,6 +538,13 @@ RunService.RenderStepped:Connect(function(dt)
 	else
 		marca.Enabled = false
 		textoDistancia.Text = ""
+	end
+end)
+
+-- si el jugador cambia de idioma, se vuelve a pintar la misión
+Idioma.Cambio:Connect(function()
+	if estadoMision then
+		mostrarMision(estadoMision)
 	end
 end)
 

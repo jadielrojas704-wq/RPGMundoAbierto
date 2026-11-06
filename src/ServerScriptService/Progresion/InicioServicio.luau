@@ -85,6 +85,7 @@ local function primeraTirada(jugador)
 		end
 	end)
 	PersonajeServicio.Aplicar(jugador)
+	AparienciaServicio.Aplicar(jugador) -- ya con el físico de su raza
 end
 
 -- ===== Acciones =====
@@ -178,6 +179,9 @@ function ACCIONES.Girar(jugador, tipo)
 		end
 	end)
 	PersonajeServicio.Aplicar(jugador)
+	if tipo == "Raza" then
+		AparienciaServicio.Aplicar(jugador) -- el físico de la nueva raza (orejas, cola, alas...)
+	end
 	return { ok = true, id = salida.id, Giros = table.clone(d.Giros) }
 end
 

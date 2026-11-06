@@ -9,13 +9,17 @@
 --   Voz.PerfilNPC(npc)  -- voz fija para cada NPC (según su nombre y si es hombre o mujer)
 --
 -- Notas:
---   * Roblox traduce el texto al idioma del jugador y elige una voz de ese idioma (AutoLocalize).
+--   * Las voces hablan SIEMPRE en inglés: el texto (en español) se cambia por su traducción
+--     (ReplicatedStorage/Config/IdiomaIngles). Los subtítulos salen en el idioma del jugador.
 --   * Máximo 300 letras por frase: las frases largas se cortan por los puntos.
 --   * Si la voz no se puede generar (sin conexión, límite de Roblox...), no pasa nada:
 --     el subtítulo sale igual y el juego sigue.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
+
+local Idioma = require(ReplicatedStorage:WaitForChild("Config"):WaitForChild("Idioma"))
 
 local Voz = {}
 
@@ -27,12 +31,13 @@ local VOCES_MUJER = { "2", "4", "6", "8" }
 -- tono: semitonos (-12 a 12) · velocidad: 0.5 a 2 · grave: graves potenciados
 -- eco: reverberación de sala (catedral para el narrador) · volumen: 0 a 3
 Voz.PERFILES = {
-	-- La voz que cuenta la historia: profunda, lenta, con eco de catedral
-	Narrador = { voz = "1", tono = -6, velocidad = 0.84, grave = true, eco = 0.55, volumen = 1.7 },
-	-- El Custodio: un anciano sabio, voz cansada y algo grave
-	Eldren = { voz = "1", tono = -3, velocidad = 0.9, grave = true, eco = 0.12, volumen = 1.6 },
+	-- (casi sin cambiar el tono: así suenan humanas y se entiende todo)
+	-- La voz que cuenta la historia: grave, pausada y clara, con un eco suave de sala
+	Narrador = { voz = "1", tono = -1.5, velocidad = 0.93, grave = true, eco = 0.15, volumen = 1.9 },
+	-- El Custodio: un anciano sabio, voz tranquila
+	Eldren = { voz = "5", tono = -1, velocidad = 0.95, grave = false, eco = 0, volumen = 1.8 },
 	-- Inscripciones de los Guardianes (al leer un texto antiguo)
-	Guardian = { voz = "2", tono = -2, velocidad = 0.86, grave = false, eco = 0.45, volumen = 1.4 },
+	Guardian = { voz = "2", tono = 0, velocidad = 0.94, grave = false, eco = 0.18, volumen = 1.6 },
 }
 
 local VOLUMEN_GENERAL = 1
@@ -52,6 +57,7 @@ end
 
 local function cadena(perfil)
 	local tts = Instance.new("AudioTextToSpeech")
+	tts.AutoLocalize = false -- siempre en inglés (no se traduce al idioma del jugador)
 	tts.VoiceId = perfil.voz or "1"
 	pcall(function()
 		tts.Pitch = perfil.tono or 0
@@ -63,9 +69,9 @@ local function cadena(perfil)
 	if perfil.grave then
 		local eq = Instance.new("AudioEqualizer")
 		pcall(function()
-			eq.LowGain = 5
-			eq.MidGain = 1
-			eq.HighGain = -3
+			eq.LowGain = 2.5 -- un poco más de cuerpo, sin tapar la voz
+			eq.MidGain = 0.5
+			eq.HighGain = 0
 		end)
 		eq.Parent = tts
 		cable(ultimo, eq)
@@ -74,8 +80,8 @@ local function cadena(perfil)
 	if perfil.eco and perfil.eco > 0 then
 		local reverb = Instance.new("AudioReverb")
 		pcall(function()
-			reverb.DecayTime = 1 + perfil.eco * 4
-			reverb.WetLevel = -14 + perfil.eco * 10
+			reverb.DecayTime = 0.8 + perfil.eco * 3
+			reverb.WetLevel = -18 + perfil.eco * 10
 			reverb.DryLevel = 0
 			reverb.Density = 1
 			reverb.Diffusion = 1
@@ -139,6 +145,7 @@ function Voz.Preparar(texto, perfil)
 	if not texto or texto == "" then
 		return linea
 	end
+	texto = Idioma.Ingles(texto)
 	local hilos = {}
 	local terminadas = 0
 	local lista = trozos(texto)
@@ -294,20 +301,21 @@ function Voz.PerfilNPC(npc)
 	local lista = if mujer then VOCES_MUJER else VOCES_HOMBRE
 	local clase = npc:GetAttribute("Clase")
 	local rol = npc:GetAttribute("Rol")
-	local tono = ((h % 7) - 3) * 0.8 -- de -2.4 a +2.4 semitonos
+	-- variaciones pequeñas: cada uno suena distinto pero sigue sonando humano
+	local tono = ((h % 5) - 2) * 0.35 -- de -0.7 a +0.7 semitonos
 	if rol == "Guardia" then
-		tono -= 2 -- los guardias, más graves
+		tono -= 0.8 -- los guardias, algo más graves
 	end
 	if clase == "Noble" then
-		tono += 0.5
+		tono += 0.3
 	end
 	local perfil = {
 		voz = lista[(h // 7) % #lista + 1],
 		tono = tono,
-		velocidad = 0.92 + ((h // 31) % 5) * 0.04, -- de 0.92 a 1.08
-		grave = rol == "Guardia",
+		velocidad = 0.96 + ((h // 31) % 5) * 0.02, -- de 0.96 a 1.04
+		grave = false,
 		eco = 0,
-		volumen = 1.3,
+		volumen = 1.6,
 	}
 	cachePerfiles[nombre] = perfil
 	return perfil

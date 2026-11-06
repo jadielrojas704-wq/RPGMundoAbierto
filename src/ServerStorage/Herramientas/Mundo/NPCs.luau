@@ -16,12 +16,42 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PueblosConfig = require(ReplicatedStorage.Config.PueblosConfig)
+local RazasConfig = require(ReplicatedStorage.Config.RazasConfig)
 
 local NPCs = {}
 
 local M = Enum.Material
 local A = Enum.AccessoryType
 local rng = Random.new(4242)
+
+-- Razas de la gente de cada cultura (pesos): cada uno con su físico (RazasConfig.RASGOS)
+local RAZAS_CULTURA = {
+	Reino = { Humano = 58, Elfo = 18, Enano = 8, Bestia = 9, Celestial = 4, Vampiro = 3 },
+	Sol = { Humano = 52, Bestia = 24, Draconido = 10, Elfo = 6, Celestial = 5, Demonio = 3 },
+	Brujos = { Humano = 44, Vampiro = 24, Demonio = 12, Elfo = 10, Bestia = 7, Celestial = 3 },
+	Norte = { Humano = 48, Enano = 24, Draconido = 10, Bestia = 10, Elfo = 5, Celestial = 3 },
+}
+
+local function elegirRaza(cultura)
+	local pesos = RAZAS_CULTURA[cultura] or { Humano = 1 }
+	local total = 0
+	for _, p in pesos do
+		total += p
+	end
+	local tirada = rng:NextNumber(0, total)
+	local nombres = {}
+	for nombre in pesos do
+		table.insert(nombres, nombre)
+	end
+	table.sort(nombres)
+	for _, nombre in nombres do
+		tirada -= pesos[nombre]
+		if tirada <= 0 then
+			return nombre
+		end
+	end
+	return "Humano"
+end
 
 local function elegir(lista)
 	return lista[rng:NextInteger(1, #lista)]
@@ -328,6 +358,25 @@ function NPCs.Crear(padre, datos)
 		descripcion.FaceAccessory = tostring(elegir(BARBA[cultura]))
 	end
 
+	-- raza: cada una con su físico (orejas, cola, alas, cuernos, colmillos, tamaño...)
+	local raza = datos.raza or elegirRaza(cultura)
+	local rasgos = RazasConfig.Rasgos(raza, rng:NextInteger(1, 1000))
+	if rasgos.piel then
+		for _, parte in { "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor", "LeftLegColor", "RightLegColor" } do
+			descripcion[parte] = rasgos.piel
+		end
+	end
+	if rasgos.altura then
+		descripcion.HeightScale *= rasgos.altura
+	end
+	if rasgos.ancho then
+		descripcion.WidthScale *= rasgos.ancho
+		descripcion.DepthScale *= rasgos.ancho
+	end
+	if rasgos.barba and genero == "Hombre" then
+		descripcion.FaceAccessory = tostring(elegir(BARBA[cultura]))
+	end
+
 	-- ropa
 	if esGuardia then
 		descripcion.HatAccessory = CASCO_GUARDIA
@@ -348,6 +397,20 @@ function NPCs.Crear(padre, datos)
 			descripcion.BackAccessory = elegido.espalda
 		end
 	end
+
+	-- accesorios de la raza (a los guardias no se les ponen en la cabeza: llevan casco)
+	local function anadir(propiedad, ids)
+		for _, id in ids or {} do
+			local actual = descripcion[propiedad]
+			descripcion[propiedad] = if actual == "" or actual == nil then tostring(id) else actual .. "," .. tostring(id)
+		end
+	end
+	if not esGuardia then
+		anadir("HatAccessory", rasgos.sombrero)
+	end
+	anadir("FaceAccessory", rasgos.cara)
+	anadir("BackAccessory", rasgos.espalda)
+	anadir("WaistAccessory", rasgos.cintura)
 
 	local ok, modelo = pcall(function()
 		return Players:CreateHumanoidModelFromDescription(descripcion, Enum.HumanoidRigType.R15)
@@ -379,6 +442,7 @@ function NPCs.Crear(padre, datos)
 	modelo:SetAttribute("Oficio", datos.oficio)
 	modelo:SetAttribute("Titulo", datos.titulo)
 	modelo:SetAttribute("Genero", genero)
+	modelo:SetAttribute("Raza", raza)
 	modelo:SetAttribute("Clase", clase)
 	modelo:SetAttribute("Rol", datos.rol)
 	modelo:SetAttribute("Cultura", cultura)
