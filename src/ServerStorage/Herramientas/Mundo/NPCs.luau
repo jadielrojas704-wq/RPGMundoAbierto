@@ -1,15 +1,11 @@
--- NPC de los pueblos: cuerpo realista, pelo y ropa propios según su cultura, su clase
--- (noble o plebeyo) y su género, nombre y botón para hablar.
+-- NPC de los pueblos con el aspecto "limpio" del juego (el mismo que los jugadores):
+-- cuerpo de bloques, ropa clásica 2D teñida con los colores de su cultura y su clase,
+-- caras de anime, peinados del catálogo con color y piezas de color (cinturón, botas, capa).
 -- Ruta en Studio: ServerStorage/Herramientas/Mundo/NPCs
 -- Lo usa ServerStorage/Herramientas/Mundo/Pueblos. No se ejecuta solo.
 --
--- La apariencia usa objetos del catálogo de Roblox (los NPC de un juego pueden usar
--- cualquier objeto del catálogo sin comprarlo):
---   * Cuerpos "Man" y "Woman" de Roblox con cabeza realista que gesticula
---   * Pelos 3D modernos y realistas (nada de pelo de bloque)
---   * Ropa 3D por capas (camisa, pantalón, túnica, vestido, abrigo...)
---   * Guardias con la armadura "Knights of Redcliff: Paladin"
--- El pelo se balancea con física desde el cliente (StarterPlayerScripts/PeloCliente).
+-- El aspecto lo construye ReplicatedStorage/Personaje/Vestuario. El pelo y las capas se
+-- mueven con física desde el cliente (StarterPlayerScripts/PeloCliente).
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -17,11 +13,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PueblosConfig = require(ReplicatedStorage.Config.PueblosConfig)
 local RazasConfig = require(ReplicatedStorage.Config.RazasConfig)
+local AparienciaConfig = require(ReplicatedStorage.Config.AparienciaConfig)
+local Vestuario = require(ReplicatedStorage.Personaje.Vestuario)
 
 local NPCs = {}
 
 local M = Enum.Material
-local A = Enum.AccessoryType
 local rng = Random.new(4242)
 
 -- Razas de la gente de cada cultura (pesos): cada uno con su físico (RazasConfig.RASGOS)
@@ -57,171 +54,148 @@ local function elegir(lista)
 	return lista[rng:NextInteger(1, #lista)]
 end
 
--- ===== CUERPOS =====
-local CUERPO = {
-	Hombre = { Torso = 86500008, RightArm = 86500036, LeftArm = 86500054, LeftLeg = 86500064, RightLeg = 86500078, Head = 10725826963, MoodAnimation = 10725833199 },
-	Mujer = { Torso = 86499666, RightArm = 86499698, LeftArm = 86499716, LeftLeg = 86499753, RightLeg = 86499793, Head = 10725626210, MoodAnimation = 10725638029 },
-	-- armadura completa de caballero para los guardias
-	Guardia = { Torso = 2493586650, RightArm = 2493786076, LeftArm = 2493559059, LeftLeg = 2493559856, RightLeg = 2493776828, Head = 10725826963 },
-}
-local CASCO_GUARDIA = "2493590711"
+-- ===== ASPECTO POR CULTURA Y CLASE =====
+local CASCO_GUARDIA = 2493590711
 
--- ===== CARAS (cabezas realistas que gesticulan: humanas y de estilo anime) =====
--- { cabeza, gesto }. Más o menos 3 de cada 10 NPC tienen cara de anime.
-local GESTO_ANIME = 14618207727
-local CARAS = {
-	Hombre = {
-		{ 10725826963, 10725833199 },
-		{ 11180212350, 11180270363 },
-		{ 11163789916, 11163856931 },
-		{ 12954264879, 12954268123 },
-		{ 13692975981, 13692973305 },
-		{ 128202565043011, 123330892729033 },
-		{ 73697371296507, 102106667157830 },
-		{ 75853796532602, 129306210206691 },
-		{ 79029537488886, 129812951799208 },
-		{ 74295716469720, 101654090668842 },
-		{ 74785198633210, 112600527789051 },
-		{ 96229607001945, 132110660061380 },
-	},
-	Mujer = {
-		{ 10725626210, 10725638029 },
-		{ 118329081640597, 78343337775421 },
-		{ 133196692848803, 133285968979014 },
-		{ 96894500746180, 117538893462160 },
-		{ 79654074199621, 90050254054804 },
-		{ 122186149619860, 73965504683643 },
-	},
-}
-local CARAS_ANIME = {
-	Hombre = { 16993075742, 137455697511260, 75581288616531, 118058361171785, 128807805327178, 120459846176613 },
-	Mujer = { 86162594467821, 121439252875925, 119128441301162, 103850685216450, 75581288616531 },
-}
-
-local PIEL = {
-	Reino = { Color3.fromRGB(234, 192, 160), Color3.fromRGB(214, 170, 136), Color3.fromRGB(196, 146, 112), Color3.fromRGB(150, 104, 76) },
-	Sol = { Color3.fromRGB(198, 148, 106), Color3.fromRGB(172, 122, 84), Color3.fromRGB(144, 100, 68), Color3.fromRGB(112, 76, 52) },
-	Brujos = { Color3.fromRGB(226, 214, 208), Color3.fromRGB(206, 192, 188), Color3.fromRGB(184, 170, 172) },
-	Norte = { Color3.fromRGB(244, 214, 194), Color3.fromRGB(230, 194, 170), Color3.fromRGB(214, 178, 152) },
-}
-
--- ===== PELO (accesorios 3D del catálogo) =====
-local PELO = {
+-- colores de la ropa (hex) de cada cultura
+local PALETAS = {
 	Reino = {
-		Hombre = { 376548738, 63690008, 4690479914, 15014232630, 107201292209451, 84355475848604 },
-		Mujer = { 12519986, 2956239660, 376526888, 13745548, 13251161977, 18118234667, 107474706603976, 17718240769, 6005348300, 80569506402913, 15450082625 },
+		plebeyo = { "#6B4A2E", "#4E6B2E", "#7A1E22", "#8A6A44", "#5C6670", "#A0764A", "#3E5A7A", "#D8C29A" },
+		noble = { "#7A1E22", "#2E4A7A", "#4B3A78", "#1E3A2E", "#5A1430" },
+		pantalon = { "#3B2A20", "#4A3A2A", "#2E2A26", "#5A4632", "#3A3E44" },
 	},
 	Sol = {
-		Hombre = { 343584973, 5100703261, 5269153561, 7259123616, 100412216731005, 376548738 },
-		Mujer = { 376527350, 4935029747, 107474706603976, 6005348300, 80569506402913 },
+		plebeyo = { "#E8DCC0", "#D8C29A", "#C9A23A", "#B5462E", "#2E7A7A", "#F2EDE4", "#C8783A" },
+		noble = { "#2E7A7A", "#C9A23A", "#F2EDE4", "#7A1E22", "#1E4A6A" },
+		pantalon = { "#E8DCC0", "#D8C29A", "#8A6A44", "#F2EDE4" },
 	},
 	Brujos = {
-		Hombre = { 12441766571, 7331264047, 94552462259427, 7259123616, 343584973 },
-		Mujer = { 4935029747, 4071226828, 376527350, 2956239660, 80569506402913, 7331264047 },
+		plebeyo = { "#3A3440", "#2E2A33", "#4B3A58", "#3E4A3A", "#5C5660", "#2A2E36" },
+		noble = { "#2A1838", "#1E1A1C", "#46204E", "#14301E", "#3A0E1E" },
+		pantalon = { "#1E1A1C", "#2A2630", "#34303A" },
 	},
 	Norte = {
-		Hombre = { 107201292209451, 84355475848604, 15014232630, 63690008, 4690479914, 94552462259427 },
-		Mujer = { 83017698423383, 13251161977, 376526888, 12519986, 17718240769, 15450082625 },
+		plebeyo = { "#5C6670", "#3E4A5A", "#6B4A2E", "#7A6A5A", "#4A5A4A", "#8A8A8A", "#2E3E5A" },
+		noble = { "#2E3E6E", "#1E2A44", "#5A1E1E", "#3A4A3A", "#E8E8EC" },
+		pantalon = { "#2E2A26", "#3B2A20", "#3A3E44", "#4A4038" },
 	},
 }
-local PELO_MAYOR = { 13703147645, 94552462259427 } -- canas para algunos mayores
-local BARBA = {
-	Reino = { 4995497755, 12051129773, 158066137, 96842327519524 },
-	Sol = { 6351051364, 11134059762, 12051129773 },
-	Brujos = { 461493477, 11134059762, 4995497755 },
-	Norte = { 158066137, 96842327519524, 6351051364, 11134059762 },
+-- prendas que lleva cada cultura (índices de AparienciaConfig.CAMISAS / PANTALONES)
+-- 1 Túnica, 2 Lino, 3 Gambesón, 4 Chaqueta, 5 Mago, 6 Corpiño, 7 Malla, 8 Pieles,
+-- 9 Desierto, 10 Chaleco, 11 Sobreveste, 12 Harapos
+local PRENDAS = {
+	Reino = { Hombre = { 1, 2, 3, 4, 10 }, Mujer = { 6, 6, 2, 1 }, noble = { 4, 5 }, nobleMujer = { 6, 5 } },
+	Sol = { Hombre = { 9, 9, 2, 10 }, Mujer = { 9, 6, 2 }, noble = { 9, 4 }, nobleMujer = { 9, 6 } },
+	Brujos = { Hombre = { 5, 12, 10, 1 }, Mujer = { 6, 5, 12 }, noble = { 5, 4 }, nobleMujer = { 5, 6 } },
+	Norte = { Hombre = { 8, 3, 1, 7 }, Mujer = { 6, 8, 3 }, noble = { 8, 4 }, nobleMujer = { 8, 6 } },
 }
+-- 1 Calzas, 2 Cuero, 3 Bombachos, 4 Falda, 5 Faldón, 6 Acolchado
+local PANTALONES = {
+	Reino = { Hombre = { 1, 2, 5 }, Mujer = { 4, 4, 1 } },
+	Sol = { Hombre = { 3, 3, 1 }, Mujer = { 4, 3 } },
+	Brujos = { Hombre = { 1, 2 }, Mujer = { 4, 4 } },
+	Norte = { Hombre = { 6, 2, 1 }, Mujer = { 4, 6 } },
+}
+local PIEL = {
+	Reino = { 2, 3, 4, 5, 6 },
+	Sol = { 5, 6, 7, 8, 9 },
+	Brujos = { 1, 11, 12, 3 },
+	Norte = { 1, 2, 3 },
+}
+local PELO_MAYOR = { "#8C8C94", "#E8E8EC", "#B8B8BC" }
 
--- ===== ROPA (por capas) =====
--- Cada conjunto: lista de { id, tipo } + sombrero/espalda opcionales
-local CAMISA_BLANCA, CAMISA_CHALECO, CAMISA_BLANCA2, CAMISA_NEGRA, BLUSA_LINO = 92423894013708, 94991372254165, 77448423220956, 105904796157571, 15557266849
-local PANTALON_MARRON, PANTALON_CUERO, PANTALON_ANTE, PANTALON_NEGRO, PANTALON_NOBLE = 140056195668204, 105372883243744, 77371329429487, 136388872034414, 82550697634263
-local BOTAS = 12650394206
-local TUNICA_CAMPESINA, TUNICA_ROJA, TUNICA_VERDE, CHALECO_CUERO = 91359280176800, 14133982829, 14134014096, 9039202434
-local CHAQUETA_NOBLE, TUNICA_ROTA, TUNICA_VAMPIRO, TUNICA_MAGO = 18928625631, 16973688129, 137570039213236, 124344642287010
-local ABRIGO_PIEL, ABRIGO_PIEL_LARGO = 101060387420980, 87557381317797
-local FALDA_VERDE, FALDA_AZUL, VESTIDO_BLANCO, VESTIDO_PRINCESA, VESTIDO_BAILE = 14929785603, 14929796183, 112259769222057, 13691581282, 88076810907288
-local CORPINO_ROJO, CORPINO_NEGRO, REINA_SOL = 91966496292930, 114294144196467, 134415657665616
-local CAPA, PANUELO_BEIGE, KEFIYEH, KEFIYEH_NEGRO = "13254752315", "16219944268", "14230101896", "14230119361"
-
-local function conjunto(capas, extra)
-	extra = extra or {}
-	return { capas = capas, sombrero = extra.sombrero, espalda = extra.espalda }
+local function elegirIndice(lista)
+	return lista[rng:NextInteger(1, #lista)]
 end
 
-local ROPA = {
-	Reino = {
-		Plebeyo = {
-			Hombre = {
-				conjunto({ { CAMISA_BLANCA, A.Shirt }, { PANTALON_MARRON, A.Pants }, { BOTAS, A.Pants }, { TUNICA_CAMPESINA, A.Jacket } }),
-				conjunto({ { CAMISA_CHALECO, A.Shirt }, { PANTALON_CUERO, A.Pants }, { BOTAS, A.Pants } }),
-				conjunto({ { TUNICA_ROJA, A.Sweater }, { PANTALON_MARRON, A.Pants }, { BOTAS, A.Pants } }),
-				conjunto({ { TUNICA_VERDE, A.Sweater }, { PANTALON_CUERO, A.Pants }, { BOTAS, A.Pants } }),
-			},
-			Mujer = {
-				conjunto({ { BLUSA_LINO, A.Shirt }, { FALDA_VERDE, A.DressSkirt } }),
-				conjunto({ { VESTIDO_BLANCO, A.DressSkirt }, { CORPINO_ROJO, A.Jacket } }),
-				conjunto({ { BLUSA_LINO, A.Shirt }, { FALDA_AZUL, A.DressSkirt } }),
-			},
-		},
-		Noble = {
-			Hombre = { conjunto({ { CAMISA_BLANCA, A.Shirt }, { PANTALON_NOBLE, A.Pants }, { CHAQUETA_NOBLE, A.Jacket } }, { espalda = CAPA }) },
-			Mujer = { conjunto({ { VESTIDO_PRINCESA, A.DressSkirt } }), conjunto({ { BLUSA_LINO, A.Shirt }, { VESTIDO_BAILE, A.DressSkirt } }) },
-		},
-	},
-	Sol = {
-		Plebeyo = {
-			Hombre = {
-				conjunto({ { CAMISA_BLANCA2, A.Shirt }, { PANTALON_ANTE, A.Pants } }, { sombrero = KEFIYEH }),
-				conjunto({ { CAMISA_BLANCA, A.Shirt }, { PANTALON_MARRON, A.Pants } }, { sombrero = KEFIYEH_NEGRO }),
-				conjunto({ { CAMISA_BLANCA2, A.Shirt }, { PANTALON_ANTE, A.Pants }, { CHALECO_CUERO, A.Jacket } }),
-			},
-			Mujer = {
-				conjunto({ { VESTIDO_BLANCO, A.DressSkirt } }, { sombrero = PANUELO_BEIGE }),
-				conjunto({ { VESTIDO_BLANCO, A.DressSkirt }, { CORPINO_ROJO, A.Jacket } }, { sombrero = PANUELO_BEIGE }),
-			},
-		},
-		Noble = {
-			Hombre = { conjunto({ { CAMISA_BLANCA2, A.Shirt }, { PANTALON_NOBLE, A.Pants }, { CHAQUETA_NOBLE, A.Jacket } }, { espalda = CAPA, sombrero = KEFIYEH }) },
-			Mujer = { conjunto({ { VESTIDO_BLANCO, A.DressSkirt }, { REINA_SOL, A.Jacket } }) },
-		},
-	},
-	Brujos = {
-		Plebeyo = {
-			Hombre = {
-				conjunto({ { PANTALON_NEGRO, A.Pants }, { TUNICA_ROTA, A.Jacket } }),
-				conjunto({ { CAMISA_NEGRA, A.Shirt }, { PANTALON_NEGRO, A.Pants }, { BOTAS, A.Pants } }),
-			},
-			Mujer = {
-				conjunto({ { BLUSA_LINO, A.Shirt }, { FALDA_AZUL, A.DressSkirt }, { CORPINO_NEGRO, A.Jacket } }),
-				conjunto({ { TUNICA_ROTA, A.Jacket } }),
-			},
-		},
-		Noble = {
-			Hombre = {
-				conjunto({ { CAMISA_NEGRA, A.Shirt }, { PANTALON_NEGRO, A.Pants }, { TUNICA_VAMPIRO, A.Jacket } }),
-				conjunto({ { CAMISA_NEGRA, A.Shirt }, { PANTALON_NEGRO, A.Pants }, { TUNICA_MAGO, A.Jacket } }),
-			},
-			Mujer = { conjunto({ { BLUSA_LINO, A.Shirt }, { FALDA_AZUL, A.DressSkirt }, { TUNICA_MAGO, A.Jacket } }, { espalda = CAPA }) },
-		},
-	},
-	Norte = {
-		Plebeyo = {
-			Hombre = {
-				conjunto({ { CAMISA_BLANCA, A.Shirt }, { PANTALON_CUERO, A.Pants }, { BOTAS, A.Pants }, { CHALECO_CUERO, A.Jacket } }),
-				conjunto({ { CAMISA_BLANCA, A.Shirt }, { PANTALON_MARRON, A.Pants }, { BOTAS, A.Pants }, { ABRIGO_PIEL, A.Jacket } }),
-			},
-			Mujer = {
-				conjunto({ { BLUSA_LINO, A.Shirt }, { FALDA_VERDE, A.DressSkirt }, { CHALECO_CUERO, A.Jacket } }),
-				conjunto({ { BLUSA_LINO, A.Shirt }, { FALDA_VERDE, A.DressSkirt }, { ABRIGO_PIEL_LARGO, A.Jacket } }),
-			},
-		},
-		Noble = {
-			Hombre = { conjunto({ { CAMISA_CHALECO, A.Shirt }, { PANTALON_NEGRO, A.Pants }, { BOTAS, A.Pants }, { ABRIGO_PIEL_LARGO, A.Jacket } }, { espalda = CAPA }) },
-			Mujer = { conjunto({ { BLUSA_LINO, A.Shirt }, { VESTIDO_BLANCO, A.DressSkirt }, { ABRIGO_PIEL_LARGO, A.Jacket } }) },
-		},
-	},
-}
+-- Índices de peinados según el largo
+local PEINADOS = { corto = {}, medio = {}, largo = {} }
+local function prepararPeinados(AparienciaConfig)
+	if #PEINADOS.corto > 0 then
+		return
+	end
+	for i, p in AparienciaConfig.PEINADOS do
+		table.insert(PEINADOS[p.largo], i)
+	end
+end
+
+-- Crea la apariencia (misma tabla que la de los jugadores) de un NPC
+local function aparienciaNPC(AparienciaConfig, cultura, clase, genero, esGuardia)
+	prepararPeinados(AparienciaConfig)
+	local paleta = PALETAS[cultura] or PALETAS.Reino
+	local mujer = genero == "Mujer"
+	local noble = clase == "Noble"
+	local mayor = not esGuardia and rng:NextNumber() < 0.14
+	local a = AparienciaConfig.PorDefecto()
+	a.Genero = genero
+	a.Piel = elegirIndice(PIEL[cultura] or PIEL.Reino)
+	a.Altura = math.floor(rng:NextNumber(0.95, 1.06) * 100) / 100
+	-- cara (las caras 1-8 son de hombre, 9-14 de mujer, 15-16 de los dos y 17-18 mayores)
+	if mayor then
+		a.Rostro = if mujer then 18 else 17
+	elseif mujer then
+		a.Rostro = elegirIndice({ 9, 10, 11, 12, 13, 14, 15, 4 })
+	else
+		a.Rostro = elegirIndice({ 1, 2, 3, 4, 5, 6, 7, 8, 15, 16 })
+	end
+	-- peinado
+	local largos = if mujer then (if rng:NextNumber() < 0.8 then PEINADOS.largo else PEINADOS.medio)
+		else (if rng:NextNumber() < 0.7 then PEINADOS.corto else PEINADOS.medio)
+	a.Peinado = elegirIndice(largos)
+	a.Peinado2 = 0
+	a.PeloColor = if mayor then elegirIndice(PELO_MAYOR) else elegirIndice(AparienciaConfig.COLORES_PELO)
+	a.Barba = if not mujer and (mayor or rng:NextNumber() < 0.4) then rng:NextInteger(1, #AparienciaConfig.BARBAS) else 0
+	a.Tocado = 0
+	if cultura == "Sol" and rng:NextNumber() < 0.45 then
+		a.Tocado = elegirIndice({ 9, 10 }) -- pañuelos
+	elseif cultura == "Brujos" and rng:NextNumber() < 0.35 then
+		a.Tocado = elegirIndice({ 11, 12 }) -- capuchas
+	elseif mujer and rng:NextNumber() < 0.3 then
+		a.Tocado = elegirIndice(if noble then { 4, 5, 6, 7 } else { 1, 2, 3 })
+	end
+	-- ropa
+	local prendas = PRENDAS[cultura] or PRENDAS.Reino
+	if esGuardia then
+		a.Camisa = 11 -- sobreveste sobre cota de malla
+		a.CamisaColor = "#" .. (PueblosConfig.CULTURAS[cultura].bandera):ToHex()
+		a.Pantalon = 6
+		a.PantalonColor = "#3A3E44"
+		a.Cinturon = 1
+		a.CinturonColor = "#2A1E16"
+		a.Botas = 2
+		a.BotasColor = "#1E1A1C"
+		a.Capa = if rng:NextNumber() < 0.5 then 1 else 0
+		a.CapaColor = "#" .. (PueblosConfig.CULTURAS[cultura].bandera):ToHex()
+		a.Tocado = 0
+		return a
+	end
+	if noble then
+		a.Camisa = elegirIndice(if mujer then prendas.nobleMujer else prendas.noble)
+		a.CamisaColor = elegirIndice(paleta.noble)
+		a.Capa = elegirIndice({ 2, 3, 3 })
+		a.CapaColor = elegirIndice(paleta.noble)
+		a.Cinturon = 1
+		a.CinturonColor = "#1E1A1C"
+		a.Botas = if cultura == "Sol" then 0 else elegirIndice({ 2, 3 })
+	else
+		a.Camisa = elegirIndice(if mujer then prendas.Mujer else prendas.Hombre)
+		a.CamisaColor = elegirIndice(paleta.plebeyo)
+		a.Capa = if rng:NextNumber() < 0.12 then 1 else 0
+		a.CapaColor = elegirIndice(paleta.plebeyo)
+		a.Cinturon = if a.Camisa == 9 then 2 else elegirIndice({ 0, 1, 1, 2, 3 })
+		a.CinturonColor = elegirIndice({ "#3B2A20", "#2A1E16", "#6B4A2E", "#7A1E22" })
+		a.Botas = if cultura == "Sol" then 0 elseif cultura == "Norte" then 2 else elegirIndice({ 0, 1, 1, 2 })
+	end
+	local pantalones = (PANTALONES[cultura] or PANTALONES.Reino)[genero]
+	a.Pantalon = elegirIndice(pantalones)
+	a.PantalonColor = if a.Pantalon == 4 then elegirIndice(paleta.plebeyo) else elegirIndice(paleta.pantalon)
+	a.BotasColor = elegirIndice({ "#1E1A1C", "#2A1E16", "#3B2A20", "#4A3426" })
+	if cultura == "Norte" and a.Capa == 0 and rng:NextNumber() < 0.3 then
+		a.Capa = 1
+		a.CapaColor = elegirIndice(paleta.plebeyo)
+	end
+	return a
+end
 
 -- Pieza decorativa pegada a una parte del cuerpo (se mueve con la animación)
 local function adorno(cuerpo, offset, tamano, material, color, nombre)
@@ -254,9 +228,6 @@ local function detallesOficio(modelo, oficio, clase, cultura)
 	local tc = torso.Size
 	if oficio == "Herrero" then
 		adorno(torso, CFrame.new(0, -tc.Y * 0.15, -tc.Z / 2 - 0.12), Vector3.new(tc.X * 0.8, tc.Y * 1.6, 0.08), M.Leather, Color3.fromRGB(86, 58, 36), "Mandil")
-	elseif oficio == "Guardia" then
-		local datos = PueblosConfig.CULTURAS[cultura]
-		adorno(torso, CFrame.new(0, -tc.Y * 0.1, -tc.Z / 2 - 0.2), Vector3.new(tc.X * 0.55, tc.Y * 1.4, 0.06), M.Fabric, datos.bandera, "Tabardo")
 	elseif clase == "Noble" then
 		-- un detalle dorado (broche) que distingue a los nobles
 		adorno(torso, CFrame.new(tc.X * 0.22, tc.Y * 0.3, -tc.Z / 2 - 0.15), Vector3.new(0.22, 0.22, 0.08), M.Foil, Color3.fromRGB(230, 180, 70), "Broche")
@@ -324,102 +295,29 @@ function NPCs.Crear(padre, datos)
 	local genero = datos.genero
 	local clase = datos.clase or "Plebeyo"
 	local esGuardia = datos.oficio == "Guardia"
-	local piel = elegir(PIEL[cultura])
-
-	local descripcion = Instance.new("HumanoidDescription")
-	for propiedad, valor in (if esGuardia then CUERPO.Guardia else CUERPO[genero]) do
-		descripcion[propiedad] = valor
-	end
-	for _, parte in { "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor", "LeftLegColor", "RightLegColor" } do
-		descripcion[parte] = piel
-	end
-	-- una cara distinta para cada NPC (humana o de anime)
-	if not esGuardia then
-		if rng:NextNumber() < 0.3 then
-			descripcion.Head = elegir(CARAS_ANIME[genero])
-			descripcion.MoodAnimation = GESTO_ANIME
-		else
-			local cara = elegir(CARAS[genero])
-			descripcion.Head = cara[1]
-			descripcion.MoodAnimation = cara[2]
-		end
-	end
-	-- un poco de variedad de altura y complexión
-	descripcion.HeightScale = rng:NextNumber(0.96, 1.06)
-	descripcion.WidthScale = rng:NextNumber(0.94, 1.04)
-
-	-- pelo (algunos hombres mayores con canas) y barba
-	local pelo = elegir(PELO[cultura][genero])
-	if genero == "Hombre" and rng:NextNumber() < 0.15 then
-		pelo = elegir(PELO_MAYOR)
-	end
-	descripcion.HairAccessory = tostring(pelo)
-	if genero == "Hombre" and rng:NextNumber() < 0.5 then
-		descripcion.FaceAccessory = tostring(elegir(BARBA[cultura]))
-	end
-
 	-- raza: cada una con su físico (orejas, cola, alas, cuernos, colmillos, tamaño...)
 	local raza = datos.raza or elegirRaza(cultura)
-	local rasgos = RazasConfig.Rasgos(raza, rng:NextInteger(1, 1000))
-	if rasgos.piel then
-		for _, parte in { "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor", "LeftLegColor", "RightLegColor" } do
-			descripcion[parte] = rasgos.piel
-		end
+	local semilla = rng:NextInteger(1, 1000)
+	local apariencia = aparienciaNPC(AparienciaConfig, cultura, clase, genero, esGuardia)
+	if RazasConfig.Rasgos(raza, semilla).barba and genero == "Hombre" and apariencia.Barba == 0 then
+		apariencia.Barba = rng:NextInteger(1, #AparienciaConfig.BARBAS)
 	end
-	if rasgos.altura then
-		descripcion.HeightScale *= rasgos.altura
-	end
-	if rasgos.ancho then
-		descripcion.WidthScale *= rasgos.ancho
-		descripcion.DepthScale *= rasgos.ancho
-	end
-	if rasgos.barba and genero == "Hombre" then
-		descripcion.FaceAccessory = tostring(elegir(BARBA[cultura]))
-	end
-
-	-- ropa
-	if esGuardia then
-		descripcion.HatAccessory = CASCO_GUARDIA
-	else
-		local estilo = ROPA[cultura][clase][genero]
-		local elegido = elegir(estilo)
-		local capas = {}
-		for orden, capa in elegido.capas do
-			table.insert(capas, { AssetId = capa[1], AccessoryType = capa[2], IsLayered = true, Order = orden })
-		end
-		pcall(function()
-			descripcion:SetAccessories(capas, false)
-		end)
-		if elegido.sombrero then
-			descripcion.HatAccessory = elegido.sombrero
-		end
-		if elegido.espalda then
-			descripcion.BackAccessory = elegido.espalda
-		end
-	end
-
-	-- accesorios de la raza (a los guardias no se les ponen en la cabeza: llevan casco)
-	local function anadir(propiedad, ids)
-		for _, id in ids or {} do
-			local actual = descripcion[propiedad]
-			descripcion[propiedad] = if actual == "" or actual == nil then tostring(id) else actual .. "," .. tostring(id)
-		end
-	end
-	if not esGuardia then
-		anadir("HatAccessory", rasgos.sombrero)
-	end
-	anadir("FaceAccessory", rasgos.cara)
-	anadir("BackAccessory", rasgos.espalda)
-	anadir("WaistAccessory", rasgos.cintura)
+	local descripcion = Vestuario.Descripcion(apariencia, raza, semilla, {
+		casco = if esGuardia then CASCO_GUARDIA else nil,
+		sinRasgosCabeza = esGuardia, -- los guardias llevan casco
+		escala = { 1, rng:NextNumber(0.96, 1.04) },
+	})
 
 	local ok, modelo = pcall(function()
 		return Players:CreateHumanoidModelFromDescription(descripcion, Enum.HumanoidRigType.R15)
 	end)
+	descripcion:Destroy()
 	if not ok or not modelo then
 		warn("[MUNDO] No pude crear el NPC", datos.nombre, modelo)
 		return nil
 	end
 	modelo.Name = datos.nombre
+	Vestuario.Vestir(modelo, apariencia)
 
 	local humanoide = modelo:FindFirstChildOfClass("Humanoid")
 	local raiz = modelo:FindFirstChild("HumanoidRootPart")

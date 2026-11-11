@@ -138,3 +138,78 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 end)
+
+-- ===== CAPAS: se balancean hacia atrás al moverse y con el viento =====
+-- La capa cuelga de una articulación (Motor6D "CapaMotor") en lo alto de la espalda;
+-- aquí se gira su "Transform" en tu pantalla (no se envía al servidor).
+local capas = {} -- [motor] = { raiz, angulo, velocidad, lado, fase }
+local function registrarCapa(panel)
+	local motor = panel:FindFirstChild("CapaMotor")
+	if not motor or capas[motor] then
+		return
+	end
+	local modelo = panel:FindFirstAncestorOfClass("Model")
+	capas[motor] = {
+		raiz = modelo and modelo:FindFirstChild("HumanoidRootPart"),
+		torso = motor.Part0,
+		angulo = 0.08,
+		velocidad = 0,
+		lado = 0,
+		fase = math.random() * 100,
+	}
+	motor.Destroying:Connect(function()
+		capas[motor] = nil
+	end)
+end
+for _, panel in CollectionService:GetTagged("Capa") do
+	registrarCapa(panel)
+end
+CollectionService:GetInstanceAddedSignal("Capa"):Connect(function(panel)
+	task.defer(registrarCapa, panel)
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+	dt = math.min(dt, 1 / 20)
+	local camara = Workspace.CurrentCamera
+	if not camara then
+		return
+	end
+	local ojo = camara.CFrame.Position
+	local viento = Workspace.GlobalWind
+	local ahora = os.clock()
+	for motor, c in capas do
+		local torso = c.torso
+		if not motor.Parent or not torso or not torso.Parent then
+			capas[motor] = nil
+			continue
+		end
+		if (torso.Position - ojo).Magnitude > DISTANCIA then
+			continue
+		end
+		-- velocidad del cuerpo vista desde el torso: al andar hacia delante, la capa se va atrás
+		local vel = if c.raiz then c.raiz.AssemblyLinearVelocity else Vector3.zero
+		local local_ = torso.CFrame:VectorToObjectSpace(vel + viento * 0.25)
+		local adelante = -local_.Z -- positivo cuando avanza
+		local objetivo = math.clamp(0.06 + adelante * 0.045 + math.max(0, -local_.Y) * 0.02, 0.02, 1.15)
+		objetivo += math.noise(ahora * 1.6, c.fase) * 0.05 * (0.4 + math.clamp(adelante / 16, 0, 1))
+		local objetivoLado = math.clamp(local_.X * 0.02, -0.3, 0.3)
+		c.velocidad += ((objetivo - c.angulo) * 34 - c.velocidad * 6.5) * dt
+		c.angulo = math.clamp(c.angulo + c.velocidad * dt, -0.1, 1.2)
+		c.lado += (objetivoLado - c.lado) * math.min(1, dt * 6)
+		-- gira hacia atrás (eje X) alrededor del borde de arriba
+		motor.Transform = CFrame.Angles(-c.angulo, 0, c.lado)
+	end
+end)
+
+-- ===== En primera persona no se ve tu propia cara flotando =====
+RunService.RenderStepped:Connect(function()
+	local personaje = Players.LocalPlayer.Character
+	local cabeza = personaje and personaje:FindFirstChild("Head")
+	local cara = cabeza and cabeza:FindFirstChild("Cara")
+	if cara and cara:IsA("SurfaceGui") then
+		local ver = cabeza.LocalTransparencyModifier < 0.5
+		if cara.Enabled ~= ver then
+			cara.Enabled = ver
+		end
+	end
+end)

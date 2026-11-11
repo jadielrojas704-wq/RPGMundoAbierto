@@ -32,7 +32,7 @@ local InicioServicio = {}
 local aleatorio = Random.new()
 local ultimo = {} -- [jugador] = { [accion] = tiempo } (límite de peticiones)
 
-local ESPERA = { Apariencia = 0.12, Nombre = 1.5, Girar = 1.2, Codigo = 1.5, Estado = 0.3, Jugar = 1 }
+local ESPERA = { Apariencia = 0.08, AparienciaCompleta = 0.6, Nombre = 1.5, Girar = 1.2, Codigo = 1.5, Estado = 0.3, Jugar = 1 }
 
 local function demasiadoRapido(jugador, accion)
 	local t = ultimo[jugador]
@@ -52,7 +52,20 @@ end
 local function anclar(jugador, quieto)
 	local personaje = jugador.Character
 	local raiz = personaje and personaje:FindFirstChild("HumanoidRootPart")
+	local humanoide = personaje and personaje:FindFirstChildOfClass("Humanoid")
 	if raiz then
+		if quieto and humanoide then
+			-- de pie sobre el suelo (si se ancla en el aire, se queda en la pose de caída)
+			local params = RaycastParams.new()
+			params.FilterType = Enum.RaycastFilterType.Exclude
+			params.FilterDescendantsInstances = { personaje }
+			local rayo = workspace:Raycast(raiz.Position + Vector3.new(0, 3, 0), Vector3.new(0, -80, 0), params)
+			if rayo then
+				local alto = humanoide.HipHeight + raiz.Size.Y / 2
+				local giro = raiz.CFrame.Rotation
+				raiz.CFrame = CFrame.new(rayo.Position + Vector3.new(0, alto, 0)) * giro
+			end
+		end
 		raiz.Anchored = quieto
 	end
 end
@@ -110,6 +123,26 @@ function ACCIONES.Jugar(jugador)
 	return { ok = true }
 end
 
+-- Cambia varias partes a la vez (botón "Al azar" del editor). Solo se guardan las válidas.
+function ACCIONES.AparienciaCompleta(jugador, tabla)
+	if type(tabla) ~= "table" then
+		return { ok = false }
+	end
+	local cuantos = 0
+	DatosServicio.Modificar(jugador, function(d)
+		for campo, valor in tabla do
+			if type(campo) == "string" and campo ~= "Ropa" and AparienciaConfig.EsValido(campo, valor) then
+				d.Apariencia[campo] = valor
+				cuantos += 1
+			end
+		end
+	end, true)
+	if cuantos > 0 then
+		AparienciaServicio.Aplicar(jugador)
+	end
+	return { ok = true, Apariencia = table.clone(DatosServicio.Obtener(jugador).Apariencia) }
+end
+
 function ACCIONES.Apariencia(jugador, campo, valor)
 	if type(campo) ~= "string" or not AparienciaConfig.EsValido(campo, valor) then
 		return { ok = false }
@@ -124,7 +157,7 @@ function ACCIONES.Apariencia(jugador, campo, valor)
 			end
 		end
 	end, true)
-	AparienciaServicio.Aplicar(jugador)
+	AparienciaServicio.Aplicar(jugador, campo)
 	return { ok = true, Apariencia = table.clone(DatosServicio.Obtener(jugador).Apariencia) }
 end
 

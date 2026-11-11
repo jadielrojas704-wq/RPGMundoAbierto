@@ -1,4 +1,5 @@
--- Viste al personaje según su CharacterData.Apariencia (pelo, cara, piel, ropa...). SOLO servidor.
+-- Viste al personaje según su CharacterData.Apariencia (peinado, cara, piel, ropa...). SOLO servidor.
+-- El aspecto lo construye ReplicatedStorage/Personaje/Vestuario (el mismo que usan los NPC).
 -- Ruta en Studio: ServerScriptService/Progresion/AparienciaServicio
 -- Las opciones posibles están en ReplicatedStorage/Config/AparienciaConfig.
 -- Se aplica al aparecer el personaje y cada vez que el jugador cambia algo en Personalizar.
@@ -8,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AparienciaConfig = require(ReplicatedStorage.Config.AparienciaConfig)
 local RazasConfig = require(ReplicatedStorage.Config.RazasConfig)
+local Vestuario = require(ReplicatedStorage.Personaje.Vestuario)
 local DatosServicio = require(script.Parent.DatosServicio)
 
 local AparienciaServicio = {}
@@ -23,6 +25,8 @@ local TIPOS_CAPA = {
 local pendientes = {} -- [jugador] = true si hay que volver a vestirlo
 local vistiendo = {} -- [jugador] = true mientras se aplica
 
+-- (ANTIGUO: solo para las estatuas de los santuarios, con cuerpo realista y ropa 3D.
+-- Los jugadores y los NPC usan ReplicatedStorage/Personaje/Vestuario.)
 -- Crea la HumanoidDescription completa a partir de la apariencia guardada
 -- humano = true: cuerpo realista (NPC, Custodio, estatuas). Los jugadores siempre son blocky.
 -- raza: añade el físico de esa raza (orejas, cola, alas, cuernos...: RazasConfig.RASGOS).
@@ -136,9 +140,14 @@ function AparienciaServicio.Descripcion(apariencia, humano, raza, semilla)
 	return descripcion
 end
 
-local function vestir(jugador)
+-- pendientes[jugador] = "completo" (hay que volver a aplicar la descripción: peinado, raza...)
+--                      o "ropa" (solo ropa, colores, cara y piezas: mucho más rápido)
+local function vestir(jugador, modo)
 	if vistiendo[jugador] then
-		pendientes[jugador] = true -- ya hay uno en marcha: al acabar, se repite con lo último
+		-- ya hay uno en marcha: al acabar, se repite con lo último
+		if pendientes[jugador] ~= "completo" then
+			pendientes[jugador] = modo
+		end
 		return
 	end
 	vistiendo[jugador] = true
@@ -148,22 +157,43 @@ local function vestir(jugador)
 		local personaje = jugador.Character
 		local humanoide = personaje and personaje:FindFirstChildOfClass("Humanoid")
 		if datos and humanoide and personaje.Parent then
-			local descripcion = AparienciaServicio.Descripcion(datos.Apariencia, false, datos.Raza, jugador.UserId)
+			local apariencia = AparienciaConfig.Completar(datos.Apariencia)
 			local ok, err = pcall(function()
-				humanoide:ApplyDescription(descripcion)
+				-- (el color natural del pelo vuelve con la descripción: el accesorio se vuelve a poner)
+				if modo ~= "ropa" or not personaje:FindFirstChild("Vestuario") or apariencia.PeloColor == "" then
+					local descripcion = Vestuario.Descripcion(apariencia, datos.Raza, jugador.UserId)
+					if apariencia.PeloColor == "" then
+						-- "Reset" vuelve a poner el peinado con su textura original
+						humanoide:ApplyDescriptionReset(descripcion)
+					else
+						humanoide:ApplyDescription(descripcion)
+					end
+					descripcion:Destroy()
+				end
+				Vestuario.Vestir(personaje, apariencia)
 			end)
 			if not ok then
 				warn("[APARIENCIA] No pude vestir a", jugador.Name, err)
 			end
-			descripcion:Destroy()
 		end
-	until not pendientes[jugador] or not jugador.Parent
+		modo = pendientes[jugador]
+	until not modo or not jugador.Parent
 	vistiendo[jugador] = nil
 end
 
--- Pide vestir al jugador (se puede llamar muchas veces seguidas: se junta)
-function AparienciaServicio.Aplicar(jugador)
-	task.spawn(vestir, jugador)
+-- Campos que solo cambian la ropa, los colores, la cara o las piezas (no hace falta
+-- volver a aplicar la HumanoidDescription entera)
+local SOLO_ROPA = {
+	Rostro = true, PeloColor = true, Camisa = true, CamisaColor = true, Pantalon = true,
+	PantalonColor = true, Cinturon = true, CinturonColor = true, Botas = true, BotasColor = true,
+	Capa = true, CapaColor = true,
+}
+AparienciaServicio.SOLO_ROPA = SOLO_ROPA
+
+-- Pide vestir al jugador (se puede llamar muchas veces seguidas: se junta).
+-- campo (opcional): lo que ha cambiado; si es solo ropa o color, se viste más rápido.
+function AparienciaServicio.Aplicar(jugador, campo)
+	task.spawn(vestir, jugador, if campo and SOLO_ROPA[campo] then "ropa" else "completo")
 end
 
 function AparienciaServicio.Iniciar()

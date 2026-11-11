@@ -19,6 +19,8 @@ local AparienciaConfig = require(Config:WaitForChild("AparienciaConfig"))
 local RazasConfig = require(Config:WaitForChild("RazasConfig"))
 local InicioConfig = require(Config:WaitForChild("InicioConfig"))
 local Remoto = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("MenuInicio")
+local EditorAspecto = require(ReplicatedStorage:WaitForChild("Interfaz"):WaitForChild("EditorAspecto"))
+local UserInputService = game:GetService("UserInputService")
 
 local jugador = Players.LocalPlayer
 local C = Estilo.COLORES
@@ -388,6 +390,14 @@ RunService:BindToRenderStep("CamaraInicio", Enum.RenderPriority.Camera.Value + 3
 		local deseada = CFrame.lookAt(posicion, centro + Vector3.new(0, 20, 0))
 		camara.CFrame = camara.CFrame:Lerp(deseada, math.min(1, dt * 1.5))
 		camara.FieldOfView = 60
+	elseif modoCamara == "centro" and raiz then
+		-- el personaje en el centro, entre los dos paneles
+		local frente = (CFrame.Angles(0, anguloPersonaje, 0) * raiz.CFrame.LookVector)
+		frente = Vector3.new(frente.X, 0, frente.Z).Unit
+		local posicion = raiz.Position + frente * 12.5 + Vector3.new(0, 0.9, 0)
+		local deseada = CFrame.lookAt(posicion, raiz.Position + Vector3.new(0, -0.35, 0))
+		camara.CFrame = camara.CFrame:Lerp(deseada, math.min(1, dt * 5))
+		camara.FieldOfView = 44
 	elseif modoCamara == "personaje" and raiz then
 		local frente = (CFrame.Angles(0, anguloPersonaje, 0) * raiz.CFrame.LookVector)
 		frente = Vector3.new(frente.X, 0, frente.Z).Unit
@@ -432,6 +442,7 @@ local pestanas = Estilo.Marco(
 	panel,
 	{ Position = UDim2.fromOffset(16, 84), Size = UDim2.new(1, -32, 0, 34), BackgroundTransparency = 1 }
 )
+pestanas.Visible = false -- las pestañas están ahora arriba, en el centro (barraArriba)
 local disposicionPestanas = Instance.new("UIListLayout")
 disposicionPestanas.FillDirection = Enum.FillDirection.Horizontal
 disposicionPestanas.Padding = UDim.new(0, 6)
@@ -1023,8 +1034,8 @@ function CONSTRUIR.Raza()
 	end
 end
 
-local NOMBRES_PESTANAS =
-	{ { "Cuerpo", "Cuerpo" }, { "Cara", "Cara" }, { "Pelo", "Pelo" }, { "Ropa", "Ropa" }, { "Raza", "Raza y magia" } }
+-- (la cara, el pelo y la ropa están ahora en la pestaña "Aspecto": EditorAspecto)
+local NOMBRES_PESTANAS = { { "Cuerpo", "Identidad" }, { "Raza", "Raza y magia" } }
 local botonesPestana = {}
 for i, datos in NOMBRES_PESTANAS do
 	local b = Estilo.Boton(pestanas, {
@@ -1063,6 +1074,199 @@ function mostrarPestana(nombre, mantenerScroll)
 		contenido.CanvasPosition = Vector2.zero
 	end
 end
+
+-- ===== EDITOR DE ASPECTO (paneles a los lados del personaje) =====
+local editor
+editor = EditorAspecto.Crear(pantalla, {
+	aplicar = function(campo, valor)
+		if estado.cargando then
+			return
+		end
+		estado.Apariencia[campo] = valor
+		sonido(SONIDO_CLIC, 0.15)
+		task.spawn(function()
+			local r = pedir("Apariencia", campo, valor)
+			if r.ok and r.Apariencia then
+				estado.Apariencia = r.Apariencia
+				editor:Actualizar(r.Apariencia)
+			end
+		end)
+	end,
+})
+
+-- Barra de arriba: título y las tres pestañas
+local barraArriba = Estilo.Marco(pantalla, {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 18),
+	Size = UDim2.fromOffset(420, 86),
+	BackgroundTransparency = 1,
+	Visible = false,
+})
+local cartelTitulo = Estilo.Marco(barraArriba, {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.fromScale(0.5, 0),
+	Size = UDim2.fromOffset(250, 38),
+	BackgroundColor3 = Color3.fromRGB(120, 26, 30),
+	BackgroundTransparency = 0.05,
+})
+Estilo.Esquinas(cartelTitulo, 4)
+Estilo.Borde(cartelTitulo, C.oro, 1.5, 0.1)
+local textoCartel = Estilo.Texto(cartelTitulo, {
+	Size = UDim2.fromScale(1, 1),
+	Font = Estilo.TITULO,
+	TextSize = 26,
+	TextColor3 = Color3.fromRGB(250, 232, 196),
+	Text = "Personalizar",
+})
+textoCartel.TextXAlignment = Enum.TextXAlignment.Center
+local filaArriba = Estilo.Marco(barraArriba, {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 46),
+	Size = UDim2.fromOffset(420, 30),
+	BackgroundTransparency = 1,
+})
+local listaArriba = Instance.new("UIListLayout")
+listaArriba.FillDirection = Enum.FillDirection.Horizontal
+listaArriba.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listaArriba.Padding = UDim.new(0, 8)
+listaArriba.SortOrder = Enum.SortOrder.LayoutOrder
+listaArriba.Parent = filaArriba
+
+-- Abajo: girar, al azar y listo
+local barraAbajo = Estilo.Marco(pantalla, {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -22),
+	Size = UDim2.fromOffset(460, 74),
+	BackgroundTransparency = 1,
+	Visible = false,
+})
+local pista = Estilo.Texto(barraAbajo, {
+	Size = UDim2.new(1, 0, 0, 18),
+	TextSize = 12,
+	TextColor3 = C.textoSuave,
+	Text = "Mantén el clic derecho y arrastra para girar a tu personaje",
+})
+pista.TextXAlignment = Enum.TextXAlignment.Center
+local botonAzar = Estilo.Boton(barraAbajo, {
+	Position = UDim2.new(0.5, -226, 0, 26),
+	Size = UDim2.fromOffset(140, 42),
+	Text = "Al azar",
+	TextSize = 15,
+	BackgroundColor3 = Color3.fromRGB(46, 38, 30),
+})
+Estilo.Borde(botonAzar, C.oro, 1.5, 0.2)
+local botonListo = Estilo.Boton(barraAbajo, {
+	Position = UDim2.new(0.5, -76, 0, 26),
+	Size = UDim2.fromOffset(140, 42),
+	Text = "Listo",
+	TextSize = 15,
+	BackgroundColor3 = Color3.fromRGB(120, 26, 30),
+})
+Estilo.Borde(botonListo, C.oro, 1.5, 0.2)
+local botonJugar3 = Estilo.Boton(barraAbajo, {
+	Position = UDim2.new(0.5, 74, 0, 26),
+	Size = UDim2.fromOffset(150, 42),
+	Text = "JUGAR",
+	TextSize = 15,
+	BackgroundColor3 = C.oroOscuro,
+})
+
+local seccionActual = "Aspecto"
+local botonesArriba = {}
+local function verSeccion(nombre)
+	seccionActual = nombre
+	for id, b in botonesArriba do
+		b.BackgroundColor3 = if id == nombre then Color3.fromRGB(120, 26, 30) else Color3.fromRGB(30, 26, 34)
+		b.TextColor3 = if id == nombre then Color3.fromRGB(250, 232, 196) else C.textoSuave
+	end
+	if nombre == "Aspecto" then
+		panel.Visible = false
+		giro.Visible = false
+		modoCamara = "centro"
+		tween(velo, 0.4, { Size = UDim2.fromScale(0, 1) })
+		task.spawn(function()
+			while estado.cargando do
+				task.wait(0.2)
+			end
+			if seccionActual == "Aspecto" and barraArriba.Visible then
+				editor:Mostrar(estado.Apariencia)
+			end
+		end)
+	else
+		editor:Ocultar()
+		panel.Visible = true
+		giro.Visible = true
+		modoCamara = "personaje"
+		tween(velo, 0.4, { Size = UDim2.fromScale(0.45, 1) })
+		mostrarPestana(nombre)
+	end
+end
+for i, datos in { { "Aspecto", "Aspecto" }, { "Cuerpo", "Identidad" }, { "Raza", "Raza y magia" } } do
+	local b = Estilo.Boton(filaArriba, {
+		LayoutOrder = i,
+		Size = UDim2.fromOffset(if i == 3 then 128 else 110, 30),
+		Text = datos[2],
+		TextSize = 13,
+	})
+	Estilo.Esquinas(b, 15)
+	Estilo.Borde(b, C.oroOscuro, 1, 0.3)
+	botonesArriba[datos[1]] = b
+	b.MouseButton1Click:Connect(function()
+		if girando then
+			return
+		end
+		sonido(SONIDO_CLIC, 0.2)
+		verSeccion(datos[1])
+	end)
+end
+
+-- Al azar: un aspecto completo nuevo (mismo género)
+local Vestuario = require(ReplicatedStorage:WaitForChild("Personaje"):WaitForChild("Vestuario"))
+botonAzar.MouseButton1Click:Connect(function()
+	if estado.cargando then
+		return
+	end
+	sonido(SONIDO_ELEGIR, 0.3)
+	local nueva = Vestuario.Aleatoria(Random.new(), estado.Apariencia.Genero)
+	nueva.Altura = estado.Apariencia.Altura
+	for _, quitar in { "Cara", "Pelo", "Ropa", "Genero", "Altura" } do
+		nueva[quitar] = nil
+	end
+	for campo, valor in nueva do
+		estado.Apariencia[campo] = valor
+	end
+	editor:Actualizar(estado.Apariencia)
+	task.spawn(function()
+		local r = pedir("AparienciaCompleta", nueva)
+		if r.ok and r.Apariencia then
+			estado.Apariencia = r.Apariencia
+			editor:Actualizar(r.Apariencia)
+		end
+	end)
+end)
+
+-- Girar al personaje con el clic derecho (o arrastrando con el dedo fuera de los paneles)
+local girandoRaton = false
+UserInputService.InputBegan:Connect(function(input, procesado)
+	if not barraArriba.Visible then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		girandoRaton = true
+	elseif input.UserInputType == Enum.UserInputType.Touch and not procesado then
+		girandoRaton = true
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+		girandoRaton = false
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if girandoRaton and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		anguloPersonaje -= input.Delta.X * 0.012
+	end
+end)
 
 -- ===== CÓDIGOS (ventana) =====
 local ventanaCodigos = Estilo.Marco(pantalla, {
@@ -1155,6 +1359,9 @@ end)
 local function verTitulo()
 	panel.Visible = false
 	giro.Visible = false
+	editor:Ocultar()
+	barraArriba.Visible = false
+	barraAbajo.Visible = false
 	ventanaCodigos.Visible = false
 	titulo.Visible = true
 	velo.Visible = true
@@ -1163,14 +1370,17 @@ local function verTitulo()
 end
 
 local function verPersonalizar()
+	-- de pie (no en la pose de caída) mientras te miras
+	local humanoideMenu = jugador.Character and jugador.Character:FindFirstChildOfClass("Humanoid")
+	if humanoideMenu and humanoideMenu:GetState() == Enum.HumanoidStateType.Freefall then
+		humanoideMenu:ChangeState(Enum.HumanoidStateType.Landed)
+	end
 	titulo.Visible = false
 	ventanaCodigos.Visible = false
-	panel.Visible = true
-	giro.Visible = true
-	modoCamara = "personaje"
+	barraArriba.Visible = true
+	barraAbajo.Visible = true
 	anguloPersonaje = 0
-	tween(velo, 0.4, { Size = UDim2.fromScale(0.45, 1) })
-	mostrarPestana(pestanaActual)
+	verSeccion(seccionActual)
 end
 
 local function jugar()
@@ -1234,6 +1444,13 @@ end
 
 botonJugar.MouseButton1Click:Connect(jugar)
 botonJugar2.MouseButton1Click:Connect(jugar)
+botonJugar3.MouseButton1Click:Connect(jugar)
+botonListo.MouseButton1Click:Connect(function()
+	if not girando then
+		sonido(SONIDO_ELEGIR, 0.3)
+		verTitulo()
+	end
+end)
 botonPersonalizar.MouseButton1Click:Connect(verPersonalizar)
 botonVolver.MouseButton1Click:Connect(function()
 	if not girando then

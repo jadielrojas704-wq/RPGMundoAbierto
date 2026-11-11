@@ -419,17 +419,203 @@ for _, c in AparienciaConfig.ROPA do
 	AparienciaConfig.ROPA_POR_ID[c.id] = c
 end
 
+-- =====================================================================================
+-- EDITOR NUEVO (estilo "ropa pegada al cuerpo", 10 nov): cuerpo blocky, ropa clásica 2D que
+-- se tiñe del color que elijas, caras de anime limpias y piezas de color (cinturón, botas,
+-- capa). Lo usan los JUGADORES y los NPC (ReplicatedStorage/Personaje/Vestuario).
+-- Las texturas las dibuja herramientas/texturas/generar.py; sus ids están en TexturasConfig.
+-- (Los campos antiguos Cara/Pelo/Ropa de arriba solo los usan las estatuas de los santuarios.)
+-- =====================================================================================
+
+-- Caras (decal pegado a la cabeza): { nombre, textura }
+AparienciaConfig.ROSTROS = {
+	{ nombre = "Sereno", textura = "Cara_Sereno" },
+	{ nombre = "Decidido", textura = "Cara_Decidido" },
+	{ nombre = "Frío", textura = "Cara_Frio" },
+	{ nombre = "Alegre", textura = "Cara_Alegre" },
+	{ nombre = "Cicatriz", textura = "Cara_Cicatriz" },
+	{ nombre = "Fiero", textura = "Cara_Fiero" },
+	{ nombre = "Cansado", textura = "Cara_Cansado" },
+	{ nombre = "Pícaro", textura = "Cara_Picaro" },
+	{ nombre = "Dulce", textura = "Cara_Dulce" },
+	{ nombre = "Seria", textura = "Cara_Seria" },
+	{ nombre = "Kawaii", textura = "Cara_Kawaii" },
+	{ nombre = "Altiva", textura = "Cara_Altiva" },
+	{ nombre = "Tímida", textura = "Cara_Timida" },
+	{ nombre = "Guerrera", textura = "Cara_Guerrera" },
+	{ nombre = "Feliz", textura = "Cara_Feliz" },
+	{ nombre = "Mirada intensa", textura = "Cara_Intensa" },
+	{ nombre = "Anciano", textura = "Cara_Anciano" },
+	{ nombre = "Anciana", textura = "Cara_Anciana" },
+}
+
+-- Peinados (accesorios de pelo del catálogo que quedan bien en la cabeza de bloque).
+-- largo: "corto" / "medio" / "largo" (los NPC los eligen según su género y edad)
+local function peinado(id, nombre, largo)
+	return { id = id, nombre = nombre, largo = largo }
+end
+AparienciaConfig.PEINADOS = {
+	peinado(376548738, "Encantador", "corto"),
+	peinado(63690008, "Clásico", "corto"),
+	peinado(15014232630, "Flequillo de lado", "corto"),
+	peinado(7259123616, "De punta", "corto"),
+	peinado(13703147645, "Revuelto plateado", "medio"),
+	peinado(13344398396, "Puntas salvajes", "corto"),
+	peinado(13344419310, "Puntas al viento", "corto"),
+	peinado(13470543305, "Desgreñado", "medio"),
+	peinado(13470517204, "Esponjoso", "medio"),
+	peinado(13832965098, "Erizado", "corto"),
+	peinado(16035727009, "Melena corta", "medio"),
+	peinado(16035736147, "Melena de viajero", "medio"),
+	peinado(115737585210553, "Revuelto con cinta", "medio"),
+	peinado(71700007644840, "Despeinado", "corto"),
+	peinado(103920542547489, "Corto suave", "corto"),
+	peinado(89820590521613, "Rebelde", "corto"),
+	peinado(121765361106908, "Nube", "medio"),
+	peinado(96443323483601, "Revuelto oscuro", "corto"),
+	peinado(118723832058600, "Lobo", "medio"),
+	peinado(104843739858929, "Capas", "medio"),
+	peinado(16843016178, "Capas cortas", "corto"),
+	peinado(123854646485044, "Mechones", "corto"),
+	peinado(117172360554785, "Corto liso", "corto"),
+	peinado(129270793158942, "Tormenta", "medio"),
+	peinado(94552462259427, "Canoso", "medio"),
+	peinado(114281663326892, "Escarcha", "corto"),
+	peinado(12519986, "Larga lisa", "largo"),
+	peinado(376526888, "Recogido alto", "largo"),
+	peinado(13251161977, "Trenza de lado", "largo"),
+	peinado(107474706603976, "Ondas largas", "largo"),
+	peinado(6005348300, "Melena suelta", "largo"),
+	peinado(80569506402913, "Larga con raya", "largo"),
+	peinado(376527350, "Coleta", "largo"),
+	peinado(83017698423383, "Trenza nórdica", "largo"),
+	peinado(14318307127, "Dos coletas", "largo"),
+	peinado(16786816274, "Capas con cinta", "largo"),
+	peinado(107401286109725, "Media melena con cinta", "medio"),
+	peinado(15562726354, "Corta con cinta", "medio"),
+	peinado(106622928023364, "Trenza larga", "largo"),
+	peinado(123443007883823, "Cascada", "largo"),
+	peinado(106224556552187, "Larga y lisa", "largo"),
+	peinado(126238504554914, "Capas largas", "largo"),
+	peinado(91475401630194, "Dos trenzas", "largo"),
+	peinado(101813639772503, "Ondas suaves", "largo"),
+	peinado(139223857317624, "Trenza sencilla", "largo"),
+	peinado(119134757613825, "Lisa hasta la cintura", "largo"),
+	peinado(17718240769, "Melena de fuego", "largo"),
+	peinado(128062901974898, "Ondas de seda", "largo"),
+}
+
+-- Tocados: cintas, diademas, pañuelos y capuchas. tipo: "Face" (cara) o "Hat" (sombrero)
+local function tocado(id, nombre, tipo)
+	return { id = id, nombre = nombre, tipo = tipo or "Hat" }
+end
+AparienciaConfig.TOCADOS = {
+	tocado(14928047806, "Cinta negra", "Face"),
+	tocado(15152195582, "Cinta rosa", "Face"),
+	tocado(14592583905, "Cinta crema", "Face"),
+	tocado(14014090020, "Diadema enjoyada"),
+	tocado(98114166297637, "Diadema de plata"),
+	tocado(100571372227310, "Diadema de rubí"),
+	tocado(104938188029156, "Diadema élfica"),
+	tocado(83974006543009, "Diadema de acólito"),
+	tocado(78102957630719, "Pañuelo de cuero"),
+	tocado(109915361196257, "Pañuelo negro"),
+	tocado(123519343539916, "Capucha negra"),
+	tocado(112167366913866, "Capucha de viaje"),
+	tocado(110038468772852, "Capucha azul"),
+}
+
+-- Ropa clásica 2D (se tiñe del color elegido). textura = nombre en TexturasConfig.
+AparienciaConfig.CAMISAS = {
+	{ nombre = "Túnica", textura = "Camisa_Tunica" },
+	{ nombre = "Camisa de lino", textura = "Camisa_Lino" },
+	{ nombre = "Gambesón", textura = "Camisa_Gambeson" },
+	{ nombre = "Chaqueta de viaje", textura = "Camisa_Chaqueta" },
+	{ nombre = "Túnica de mago", textura = "Camisa_Mago" },
+	{ nombre = "Blusa y corpiño", textura = "Camisa_Corpino" },
+	{ nombre = "Cota de malla", textura = "Camisa_Malla" },
+	{ nombre = "Abrigo de pieles", textura = "Camisa_Pieles" },
+	{ nombre = "Ropa del desierto", textura = "Camisa_Desierto" },
+	{ nombre = "Chaleco", textura = "Camisa_Chaleco" },
+	{ nombre = "Sobreveste", textura = "Camisa_Sobreveste" },
+	{ nombre = "Harapos", textura = "Camisa_Harapos" },
+}
+AparienciaConfig.PANTALONES = {
+	{ nombre = "Calzas", textura = "Pantalon_Calzas" },
+	{ nombre = "Pantalón de cuero", textura = "Pantalon_Cuero" },
+	{ nombre = "Bombachos", textura = "Pantalon_Bombacho" },
+	{ nombre = "Falda larga", textura = "Pantalon_Falda" },
+	{ nombre = "Faldón", textura = "Pantalon_Faldon" },
+	{ nombre = "Acolchado", textura = "Pantalon_Acolchado" },
+}
+-- Piezas de color (se construyen con bloques encima del cuerpo). La 0 es "ninguno".
+AparienciaConfig.CINTURONES = { "Cinturón de cuero", "Fajín", "Correas cruzadas" }
+AparienciaConfig.BOTAS = { "Botas cortas", "Botas altas", "Botas de montar" }
+AparienciaConfig.CAPAS = { "Capa corta", "Capa larga", "Capa con esclavina" }
+
+-- 16 colores rápidos (como en el selector de color) y los del pelo natural
+AparienciaConfig.COLORES_RAPIDOS = {
+	"#1E1A1C", "#3B2A20", "#6B4A2E", "#A0764A", "#D8C29A", "#F2EDE4",
+	"#7A1E22", "#B5462E", "#C9A23A", "#4E6B2E", "#2E5A4E", "#2E4A7A",
+	"#4B3A78", "#7A3A6A", "#5C6670", "#A8B0B8",
+}
+AparienciaConfig.COLORES_PELO = {
+	"#1A1614", "#3A2618", "#5C3A22", "#8A5A32", "#B88A4E", "#E3C78A",
+	"#F1E6CC", "#A8402A", "#D06A2E", "#8C8C94", "#E8E8EC", "#2E3E6E",
+}
+
 -- Apariencia de un personaje nuevo
 function AparienciaConfig.PorDefecto()
 	return {
 		Genero = "Hombre",
 		Piel = 3,
+		Altura = 1,
+		-- editor nuevo
+		Rostro = 1,
+		Peinado = 1,
+		Peinado2 = 0,
+		PeloColor = "#3A2618",
+		Tocado = 0,
+		Barba = 0, -- 0 = sin barba
+		Camisa = 1,
+		CamisaColor = "#7A1E22",
+		Pantalon = 1,
+		PantalonColor = "#3B2A20",
+		Cinturon = 1,
+		CinturonColor = "#3B2A20",
+		Botas = 1,
+		BotasColor = "#1E1A1C",
+		Capa = 0,
+		CapaColor = "#2E4A7A",
+		-- antiguos (solo estatuas)
 		Cara = 1,
 		Pelo = 1,
-		Barba = 0, -- 0 = sin barba
 		Ropa = "Campesino",
-		Altura = 1,
 	}
+end
+
+-- Completa una apariencia guardada con los campos que le falten (partidas antiguas)
+function AparienciaConfig.Completar(apariencia)
+	local base = AparienciaConfig.PorDefecto()
+	if type(apariencia) ~= "table" then
+		return base
+	end
+	for campo, valor in base do
+		if apariencia[campo] == nil or not AparienciaConfig.EsValido(campo, apariencia[campo]) then
+			apariencia[campo] = valor
+		end
+	end
+	return apariencia
+end
+
+local function esColor(valor)
+	return type(valor) == "string" and string.match(valor, "^#%x%x%x%x%x%x$") ~= nil
+end
+
+local function indice(lista, valor, conCero)
+	return type(valor) == "number"
+		and valor == math.floor(valor)
+		and ((conCero and valor == 0) or (valor >= 1 and valor <= #lista))
 end
 
 -- ¿Es válido este valor para este campo? (lo usa el servidor antes de guardar)
@@ -437,17 +623,44 @@ function AparienciaConfig.EsValido(campo, valor)
 	if campo == "Genero" then
 		return valor == "Hombre" or valor == "Mujer"
 	elseif campo == "Piel" then
-		return type(valor) == "number" and AparienciaConfig.PIELES[valor] ~= nil
-	elseif campo == "Cara" then
-		return type(valor) == "number" and AparienciaConfig.CARAS[valor] ~= nil
-	elseif campo == "Pelo" then
-		return type(valor) == "number" and (valor == 0 or AparienciaConfig.PELOS[valor] ~= nil)
-	elseif campo == "Barba" then
-		return type(valor) == "number" and (valor == 0 or AparienciaConfig.BARBAS[valor] ~= nil)
-	elseif campo == "Ropa" then
-		return type(valor) == "string" and AparienciaConfig.ROPA_POR_ID[valor] ~= nil
+		return indice(AparienciaConfig.PIELES, valor)
 	elseif campo == "Altura" then
 		return type(valor) == "number" and valor >= 0.92 and valor <= 1.08
+	elseif campo == "Rostro" then
+		return indice(AparienciaConfig.ROSTROS, valor)
+	elseif campo == "Peinado" or campo == "Peinado2" then
+		return indice(AparienciaConfig.PEINADOS, valor, true)
+	elseif campo == "Tocado" then
+		return indice(AparienciaConfig.TOCADOS, valor, true)
+	elseif campo == "Barba" then
+		return indice(AparienciaConfig.BARBAS, valor, true)
+	elseif campo == "Camisa" then
+		return indice(AparienciaConfig.CAMISAS, valor)
+	elseif campo == "Pantalon" then
+		return indice(AparienciaConfig.PANTALONES, valor)
+	elseif campo == "Cinturon" then
+		return indice(AparienciaConfig.CINTURONES, valor, true)
+	elseif campo == "Botas" then
+		return indice(AparienciaConfig.BOTAS, valor, true)
+	elseif campo == "Capa" then
+		return indice(AparienciaConfig.CAPAS, valor, true)
+	elseif campo == "PeloColor" then
+		return valor == "" or esColor(valor) -- "" = color natural del pelo
+	elseif
+		campo == "CamisaColor"
+		or campo == "PantalonColor"
+		or campo == "CinturonColor"
+		or campo == "BotasColor"
+		or campo == "CapaColor"
+	then
+		return esColor(valor)
+	-- antiguos (estatuas)
+	elseif campo == "Cara" then
+		return indice(AparienciaConfig.CARAS, valor)
+	elseif campo == "Pelo" then
+		return indice(AparienciaConfig.PELOS, valor, true)
+	elseif campo == "Ropa" then
+		return type(valor) == "string" and AparienciaConfig.ROPA_POR_ID[valor] ~= nil
 	end
 	return false
 end

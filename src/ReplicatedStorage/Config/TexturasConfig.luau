@@ -1,0 +1,45 @@
+-- Ids de las texturas del juego (ropa clásica 2D y caras) subidas a Roblox.
+-- Ruta en Studio: ReplicatedStorage/Config/TexturasConfig
+--
+-- Las dibuja herramientas/texturas/generar.py y las sube el plugin
+-- ServerStorage/Herramientas/PluginSubidor (el 10 nov 2026). Si se vuelven a subir,
+-- hay que copiar aquí los ids nuevos (salen en el atributo "TexturasIds" de Workspace).
+
+return {
+	Camisa_Chaleco = 105015270184174,
+	Camisa_Chaqueta = 91846915994167,
+	Camisa_Corpino = 71497837589327,
+	Camisa_Desierto = 74086702948151,
+	Camisa_Gambeson = 113019836247334,
+	Camisa_Harapos = 105510464572720,
+	Camisa_Lino = 106812989608878,
+	Camisa_Mago = 105661348108321,
+	Camisa_Malla = 79150955545189,
+	Camisa_Pieles = 81562705887824,
+	Camisa_Sobreveste = 101994863861004,
+	Camisa_Tunica = 136939252644473,
+	Cara_Alegre = 88266517011576,
+	Cara_Altiva = 125175812049945,
+	Cara_Anciana = 94016348620293,
+	Cara_Anciano = 73453532190302,
+	Cara_Cansado = 94363437433764,
+	Cara_Cicatriz = 108245980601769,
+	Cara_Decidido = 113732814994935,
+	Cara_Dulce = 103071843599100,
+	Cara_Feliz = 78985351000214,
+	Cara_Fiero = 118823402499112,
+	Cara_Frio = 77964991772097,
+	Cara_Guerrera = 93232036734638,
+	Cara_Intensa = 118170814815798,
+	Cara_Kawaii = 77282962619129,
+	Cara_Picaro = 86156638831711,
+	Cara_Sereno = 102659889337475,
+	Cara_Seria = 95935917962034,
+	Cara_Timida = 133500013099137,
+	Pantalon_Acolchado = 103509440987276,
+	Pantalon_Bombacho = 130449825446417,
+	Pantalon_Calzas = 109320702356245,
+	Pantalon_Cuero = 95429979714664,
+	Pantalon_Falda = 112534543977308,
+	Pantalon_Faldon = 135572832676745,
+}

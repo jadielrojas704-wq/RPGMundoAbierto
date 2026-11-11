@@ -27,7 +27,8 @@ local ProgresionConfig = require(ReplicatedStorage.Config.ProgresionConfig)
 local RegionesConfig = require(ReplicatedStorage.Config.RegionesConfig)
 local DatosServicio = require(script.Parent.Parent.Progresion.DatosServicio)
 local PersonajeServicio = require(script.Parent.Parent.Progresion.PersonajeServicio)
-local AparienciaServicio = require(script.Parent.Parent.Progresion.AparienciaServicio)
+local AparienciaConfig = require(ReplicatedStorage.Config.AparienciaConfig)
+local Vestuario = require(ReplicatedStorage.Personaje.Vestuario)
 local RuinasServicio = require(script.Parent.RuinasServicio)
 local CabanaServicio = require(script.Parent.CabanaServicio)
 
@@ -251,19 +252,33 @@ local function crearCustodio()
 	-- Eldren espera en el porche de su cabaña, mirando hacia los muñecos
 	local cabana = CabanaServicio.Modelo()
 	local porche = cabana and cabana:GetAttribute("Porche")
-	local descripcion = AparienciaServicio.Descripcion({
-		Genero = "Hombre",
-		Piel = 2,
-		Cara = 3,
-		Pelo = 15,
-		Barba = 3,
-		Ropa = "Encapuchado",
-		Altura = 1.02,
-	}, true) -- cuerpo humano realista (es un NPC)
+	-- Eldren: un anciano de pelo canoso con túnica de mago verde musgo y capa con esclavina
+	local apariencia = AparienciaConfig.PorDefecto()
+	apariencia.Genero = "Hombre"
+	apariencia.Piel = 2
+	apariencia.Altura = 1.02
+	apariencia.Rostro = 17 -- Anciano
+	apariencia.Peinado = 25 -- Canoso
+	apariencia.PeloColor = "#DCDCE0"
+	apariencia.Barba = 3
+	apariencia.Camisa = 5 -- Túnica de mago
+	apariencia.CamisaColor = "#3E4E3A"
+	apariencia.Pantalon = 5 -- Faldón
+	apariencia.PantalonColor = "#4A3A2A"
+	apariencia.Cinturon = 3
+	apariencia.CinturonColor = "#3B2A20"
+	apariencia.Botas = 1
+	apariencia.BotasColor = "#2A1E16"
+	apariencia.Capa = 3
+	apariencia.CapaColor = "#2E3A2E"
+	local descripcion = Vestuario.Descripcion(apariencia, "Humano", 1)
 	local ok, modelo = pcall(function()
 		return Players:CreateHumanoidModelFromDescription(descripcion, Enum.HumanoidRigType.R15)
 	end)
 	descripcion:Destroy()
+	if ok and modelo then
+		Vestuario.Vestir(modelo, apariencia)
+	end
 	if not ok or not modelo then
 		warn("[HISTORIA] No pude crear al Custodio", modelo)
 		return

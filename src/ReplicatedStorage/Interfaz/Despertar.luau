@@ -152,6 +152,9 @@ local function actorEldren(cabana)
 		if p:IsA("BasePart") or p:IsA("Decal") then
 			table.insert(escondidas, p)
 			p.LocalTransparencyModifier = 1
+		elseif p:IsA("SurfaceGui") then -- la cara
+			table.insert(escondidas, p)
+			p.Enabled = false
 		end
 	end
 	local animador = humanoide:FindFirstChildOfClass("Animator") or Instance.new("Animator")
@@ -196,7 +199,11 @@ local function actorEldren(cabana)
 		quitar = function()
 			for _, p in escondidas do
 				if p.Parent then
-					p.LocalTransparencyModifier = 0
+					if p:IsA("SurfaceGui") then
+						p.Enabled = true
+					else
+						p.LocalTransparencyModifier = 0
+					end
 				end
 			end
 			actor:Destroy()
@@ -299,6 +306,8 @@ function Despertar.Reproducir()
 				cosa.LocalTransparencyModifier = if visible then 0 else 1
 			elseif cosa:IsA("Decal") and cosa.Parent and cosa.Parent.Name == "Head" then
 				cosa.LocalTransparencyModifier = if visible then 0 else 1
+			elseif cosa:IsA("SurfaceGui") and cosa.Name == "Cara" then
+				cosa.Enabled = visible
 			end
 		end
 	end
@@ -427,6 +436,10 @@ function Despertar.Reproducir()
 		alTerminar = function()
 			if quitarAmuleto then
 				quitarAmuleto()
+			end
+			-- si se saltó la escena antes de la primera toma, el negro del principio sigue puesto
+			if guiCartel.Parent then
+				guiCartel:Destroy()
 			end
 			if eldren then
 				eldren.quitar()
