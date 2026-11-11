@@ -61,6 +61,10 @@ function Vestuario.Descripcion(apariencia, raza, semilla, extra)
 	d.WidthScale = 1
 	d.DepthScale = 1
 	d.HeadScale = 1
+	-- proporciones clásicas de bloque (sin esto, Roblox mezcla proporciones "Rthro" y quedan
+	-- huecos entre la cabeza y el cuello o entre la mano y el brazo)
+	d.BodyTypeScale = 0
+	d.ProportionScale = 0
 	if extra.escala then
 		d.HeightScale *= extra.escala[1] or 1
 		d.WidthScale *= extra.escala[2] or 1
@@ -332,9 +336,55 @@ local function colorearPelo(modelo, hex)
 	end
 end
 
+-- ===== 5) Uniones sin huecos =====
+-- Con algunas combinaciones de cabeza y cuerpo de Roblox, la cabeza o las manos quedan
+-- separadas unos centímetros (parece que flotan). Aquí se acerca cada pieza a la de al lado
+-- moviendo su punto de unión (Attachment) hasta que se tocan, con un pelín de solape.
+local UNIONES = {
+	Neck = true, Waist = true,
+	RightElbow = true, LeftElbow = true, RightWrist = true, LeftWrist = true,
+	RightKnee = true, LeftKnee = true, RightAnkle = true, LeftAnkle = true,
+}
+local SOLAPE = 0.02
+
+function Vestuario.AjustarUniones(modelo)
+	for _, union in modelo:GetDescendants() do
+		if not UNIONES[union.Name] then
+			continue
+		end
+		local a0, a1
+		if union:IsA("Motor6D") then
+			local p0, p1 = union.Part0, union.Part1
+			local nombre = union.Name .. "RigAttachment"
+			a0 = p0 and p0:FindFirstChild(nombre)
+			a1 = p1 and p1:FindFirstChild(nombre)
+		elseif union:IsA("AnimationConstraint") then
+			a0, a1 = union.Attachment0, union.Attachment1
+		end
+		if not (a0 and a1 and a0.Parent:IsA("BasePart") and a1.Parent:IsA("BasePart")) then
+			continue
+		end
+		local p0, p1 = a0.Parent, a1.Parent
+		local rel = a0.Position - a1.Position -- de dónde queda el centro de p1 visto desde p0
+		if math.abs(rel.Y) < math.abs(rel.X) or math.abs(rel.Y) < math.abs(rel.Z) then
+			continue -- no es una unión vertical
+		end
+		local tocar = p0.Size.Y / 2 + p1.Size.Y / 2 - SOLAPE
+		local hueco = math.abs(rel.Y) - tocar
+		if hueco > 0.005 then
+			local signo = if rel.Y > 0 then 1 else -1
+			a1.Position += Vector3.new(0, signo * hueco, 0)
+			if union:IsA("Motor6D") then
+				union.C1 = a1.CFrame
+			end
+		end
+	end
+end
+
 -- ===== Vestir (después de aplicar la HumanoidDescription) =====
 function Vestuario.Vestir(modelo, apariencia)
 	local a = apariencia or AparienciaConfig.PorDefecto()
+	Vestuario.AjustarUniones(modelo)
 	-- ropa clásica 2D
 	for _, hijo in modelo:GetChildren() do
 		if hijo:IsA("Shirt") or hijo:IsA("Pants") or hijo:IsA("ShirtGraphic") then

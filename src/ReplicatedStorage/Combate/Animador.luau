@@ -101,28 +101,74 @@ local RIGIDEZ = {
 	RightAnkle = 22,
 }
 
--- Convierte una articulación (de cualquier tipo) en algo que podemos mover
+-- Convierte una articulación (de cualquier tipo) en algo que podemos mover.
+-- "original" es la posición de reposo de la articulación. OJO: no se guarda para siempre.
+-- Si alguien que no somos nosotros la cambia (el servidor al vestir al personaje, el ajuste
+-- de proporciones de Roblox...), se toma el valor nuevo como reposo. Antes se guardaba al
+-- empezar, y al cambiar el cuerpo la cabeza y las manos quedaban separadas ("flotando").
+local function casiIgual(a, b)
+	return (a.Position - b.Position).Magnitude < 1e-3 and a.LookVector:Dot(b.LookVector) > 0.99999
+		and a.UpVector:Dot(b.UpVector) > 0.99999
+end
+
 local function prepararArticulacion(objeto)
 	if not objeto then
 		return nil
 	end
+	local art
 	if objeto:IsA("Motor6D") then
-		return {
-			original = objeto.C0,
-			poner = function(cf)
+		art = {
+			objeto = objeto,
+			leer = function()
+				return objeto.C0
+			end,
+			escribir = function(cf)
 				objeto.C0 = cf
 			end,
 		}
 	elseif objeto:IsA("AnimationConstraint") and objeto.Attachment0 then
 		local adjunto = objeto.Attachment0
-		return {
-			original = adjunto.CFrame,
-			poner = function(cf)
+		art = {
+			objeto = objeto,
+			adjunto = adjunto,
+			leer = function()
+				return adjunto.CFrame
+			end,
+			escribir = function(cf)
 				adjunto.CFrame = cf
 			end,
 		}
+	else
+		return nil
 	end
-	return nil
+	art.original = art.leer()
+	art.escrito = nil -- lo último que pusimos nosotros (nil = no la estamos moviendo)
+	art.poner = function(cf)
+		art.escribir(cf)
+		art.escrito = art.leer()
+	end
+	-- Antes de mover: si la articulación cambió por otro motivo, ese es el nuevo reposo
+	art.vigilar = function()
+		local actual = art.leer()
+		if art.escrito == nil or not casiIgual(actual, art.escrito) then
+			art.original = actual
+		end
+	end
+	art.valida = function()
+		return objeto.Parent ~= nil and (art.adjunto == nil or (art.adjunto.Parent ~= nil and objeto.Attachment0 == art.adjunto))
+	end
+	return art
+end
+
+local function buscarArticulaciones(personaje)
+	local lista = {}
+	for _, nombre in ARTICULACIONES do
+		local objeto = personaje:FindFirstChild(nombre, true)
+		if objeto and (objeto:IsA("Motor6D") or objeto:IsA("AnimationConstraint")) then
+			lista[nombre] = prepararArticulacion(objeto)
+		end
+	end
+	return lista
 end
 
 function Animador.De(personaje)
@@ -135,13 +181,7 @@ function Animador.De(personaje)
 	end
 	local self = setmetatable({}, Animador)
 	self.personaje = personaje
-	self.articulaciones = {}
-	for _, nombre in ARTICULACIONES do
-		local objeto = personaje:FindFirstChild(nombre, true)
-		if objeto and (objeto:IsA("Motor6D") or objeto:IsA("AnimationConstraint")) then
-			self.articulaciones[nombre] = prepararArticulacion(objeto)
-		end
-	end
+	self.articulaciones = buscarArticulaciones(personaje)
 	self.postura = nil -- pose de la capa de postura
 	self.pesoPostura = 0
 	self.objetivoPostura = 0
@@ -241,6 +281,18 @@ function Animador:_actualizar(dt)
 		self.tocado = true
 		return
 	end
+	-- si se cambió el cuerpo (al vestir al personaje se cambian las piezas), se buscan otra vez
+	for _, articulacion in self.articulaciones do
+		if not articulacion.valida() then
+			self.articulaciones = buscarArticulaciones(personaje)
+			table.clear(self.suave)
+			break
+		end
+	end
+	-- el reposo de cada articulación sigue a los cambios que no hacemos nosotros
+	for _, articulacion in self.articulaciones do
+		articulacion.vigilar()
+	end
 	local congelado = os.clock() < self.congeladoHasta
 	local paso = if congelado then 0 else dt
 
@@ -338,6 +390,7 @@ function Animador:_actualizar(dt)
 			-- todo en reposo: dejamos las articulaciones como estaban
 			for _, articulacion in self.articulaciones do
 				articulacion.poner(articulacion.original)
+				articulacion.escrito = nil
 			end
 			self.tocado = false
 			table.clear(self.suave)
@@ -398,6 +451,7 @@ function Animador.Soltar(personaje)
 	if self then
 		for _, articulacion in self.articulaciones do
 			articulacion.poner(articulacion.original)
+			articulacion.escrito = nil
 		end
 		self.tocado = false
 		table.clear(self.suave)

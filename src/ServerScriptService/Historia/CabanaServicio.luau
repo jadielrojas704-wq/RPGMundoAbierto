@@ -224,7 +224,13 @@ local function construir()
 	for k = -1, 1 do
 		tronco(modelo, (cf * CFrame.new(mx - 1.9, suelo + 0.6, k * 0.7 - 0.9)).Position, (cf * CFrame.new(mx - 1.4, suelo + 0.6, k * 0.7 + 0.9)).Position, 0.45, MADERA_OSCURA)
 	end
-	C.fuego(modelo, (cf * CFrame.new(mx - 1.7, suelo + 0.9, 0)).Position, 2.4)
+	local hogarFuego = C.fuego(modelo, (cf * CFrame.new(mx - 1.7, suelo + 0.9, 0)).Position, 2.4)
+	-- dentro de la cabaña la luz del fuego es más suave (si no, quema las caras de cerca)
+	local luzFuego = hogarFuego:FindFirstChildOfClass("PointLight")
+	if luzFuego then
+		luzFuego.Brightness = 0.9
+		luzFuego.Range = 16
+	end
 	C.humo(modelo, (cf * CFrame.new(mx + 0.9, cumbre + 3.2, 0)).Position)
 	-- objetos de la repisa
 	for k, color in { Color3.fromRGB(70, 120, 90), Color3.fromRGB(130, 60, 140), Color3.fromRGB(170, 130, 60) } do
@@ -264,7 +270,7 @@ local function construir()
 	llama.Size = 0.6
 	llama.Heat = 2
 	llama.Parent = vela
-	C.luz(vela, Color3.fromRGB(255, 190, 120), 1.1, 14)
+	C.luz(vela, Color3.fromRGB(255, 190, 120), 0.6, 10)
 	C.parte({ Name = "Cuenco", Shape = Enum.PartType.Ball, CFrame = mesa * CFrame.new(1, 3.3, 0.2), Size = Vector3.new(1.3, 0.6, 1.3), Material = M.Wood, Color = Color3.fromRGB(140, 100, 64), Parent = modelo })
 	bloque(mesa * CFrame.new(0.4, 3.25, -0.8) * CFrame.Angles(0, 0.4, 0), Vector3.new(1.4, 0.25, 1.8), M.Fabric, Color3.fromRGB(110, 30, 34), "Libro", false)
 
